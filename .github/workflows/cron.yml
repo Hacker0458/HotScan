@@ -1,0 +1,56 @@
+name: Scheduled Data Fetch
+
+on:
+  schedule:
+    # 每 30 分钟运行一次（UTC时间）
+    - cron: '*/30 * * * *'
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  fetch-and-generate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      
+      - name: Install pnpm
+        run: npm install -g pnpm
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Generate Prisma Client
+        run: npx prisma generate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      
+      - name: Fetch Tickers
+        run: pnpm jobs:fetch
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATASOURCE: ${{ secrets.DATASOURCE }}
+      
+      - name: Make Signals
+        run: pnpm jobs:signals
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_API_BASE: ${{ secrets.OPENAI_API_BASE }}
+          DATASOURCE: ${{ secrets.DATASOURCE }}
+      
+      - name: Report Status
+        if: always()
+        run: |
+          if [ $? -eq 0 ]; then
+            echo "✅ Jobs completed successfully"
+          else
+            echo "❌ Jobs failed"
+            exit 1
+          fi

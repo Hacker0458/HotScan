@@ -1,0 +1,68 @@
+name: Health Check
+
+on:
+  schedule:
+    # 每小时检查一次
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  health-check:
+    name: Check Application Health
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check API health
+        id: health
+        run: |
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.VERCEL_URL }}/api/health")
+          echo "http_code=$RESPONSE" >> $GITHUB_OUTPUT
+          
+          if [ "$RESPONSE" -ne 200 ]; then
+            echo "Health check failed with status: $RESPONSE"
+            exit 1
+          fi
+          
+          echo "Health check passed"
+      
+      - name: Send alert on failure
+        if: failure() && secrets.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "🚨 Health Check Failed",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "🚨 应用健康检查失败"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*URL:*\n${{ secrets.VERCEL_URL }}/api/health"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Status:*\n${{ steps.health.outputs.http_code }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "⚠️ *The application may be down. Please investigate immediately.*"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+

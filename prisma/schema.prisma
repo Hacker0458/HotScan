@@ -1,0 +1,326 @@
+// Prisma Schema for HotScan - Crypto/DeFi Analysis Platform
+// 加密货币/DeFi 分析平台数据模型
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+// ============================================
+// NextAuth Models (保留认证系统)
+// ============================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  
+  accounts      Account[]
+  sessions      Session[]
+  subscriptions Subscription[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@index([email])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================
+// Core Business Models
+// ============================================
+
+// Asset - 加密资产/代币
+model Asset {
+  id        String   @id @default(cuid())
+  symbol    String   @unique // e.g., "BTC", "ETH", "PEPE"
+  name      String   // e.g., "Bitcoin", "Ethereum"
+  chain     String   // e.g., "ethereum", "bsc", "solana"
+  
+  // Metadata
+  logo      String?
+  decimals  Int      @default(18)
+  isActive  Boolean  @default(true)
+  
+  // Relations
+  pairs     Pair[]
+  signals   Signal[]
+  shares    Share[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([symbol])
+  @@index([chain])
+  @@index([createdAt])
+}
+
+// Pair - 交易对信息
+model Pair {
+  id           String   @id @default(cuid())
+  assetId      String
+  
+  // DEX Info
+  dex          String   // e.g., "uniswap-v3", "pancakeswap", "raydium"
+  address      String   // Pool/Pair contract address
+  
+  // Liquidity
+  liquidityUSD Float    // Current liquidity in USD
+  
+  // Metadata
+  baseToken    String?  // Base token symbol (e.g., "USDT")
+  fee          Float?   // Trading fee percentage
+  isActive     Boolean  @default(true)
+  
+  // Relations
+  asset        Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  @@unique([assetId, dex, address])
+  @@index([assetId])
+  @@index([dex])
+  @@index([liquidityUSD(sort: Desc)])
+  @@index([createdAt])
+}
+
+// Signal - 交易信号/技术指标
+model Signal {
+  id              String   @id @default(cuid())
+  assetId         String
+  
+  // Time Window
+  window          String   // e.g., "5m", "15m", "1h", "4h", "1d"
+  
+  // Price Indicators
+  priceChangePct  Float    // Price change percentage in window
+  currentPrice    Float?   // Current price for reference
+  
+  // Volume Indicators
+  volZScore       Float    // Volume Z-Score (abnormal volume detection)
+  volumeUSD       Float?   // Actual volume in USD
+  
+  // Liquidity Indicators
+  liqDeltaPct     Float    // Liquidity delta percentage
+  totalLiquidityUSD Float? // Total liquidity
+  
+  // Holder Analysis
+  top5HoldPct     Float    // Top 5 holders percentage
+  holderCount     Int?     // Total unique holders
+  
+  // Wallet Activity
+  newWalletNetBuy Float    // Net buy from new wallets (USD)
+  newWalletCount  Int?     // Number of new wallets
+  
+  // Risk Assessment
+  riskScore       Float    // Overall risk score (0-100)
+  contractAgeDays Int      // Contract age in days
+  
+  // Sentiment & AI Analysis
+  sentiment       String?  // bullish, bearish, neutral
+  aiSummary       String?  @db.Text
+  alertLevel      String?  // low, medium, high, critical
+  
+  // Relations
+  asset           Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime @default(now())
+  
+  @@index([assetId])
+  @@index([window])
+  @@index([riskScore(sort: Desc)])
+  @@index([volZScore(sort: Desc)])
+  // 复合索引：按创建时间降序 + 风险分数降序
+  @@index([createdAt(sort: Desc), riskScore(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+}
+
+// Term - 金融术语（RAG 知识库）
+model Term {
+  id          String   @id @default(cuid())
+  
+  // Term Data
+  term        String   @unique // e.g., "Liquidity Pool", "Impermanent Loss"
+  definition  String   @db.Text
+  category    String   // defi, trading, blockchain, general
+  example     String?  @db.Text
+  
+  // Vector Embedding for RAG
+  embedding   Unsupported("vector(1536)")?
+  
+  // Metadata
+  searchCount Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([term])
+  @@index([category])
+  @@index([searchCount(sort: Desc)])
+}
+
+// Share - 分享海报
+model Share {
+  id          String   @id @default(cuid())
+  assetId     String
+  
+  // Poster Content
+  title       String
+  description String?  @db.Text
+  imageUrl    String?  // Generated poster image URL
+  
+  // Metadata
+  viewCount   Int      @default(0)
+  shareType   String   @default("signal") // signal, analysis, alert
+  
+  // Relations
+  asset       Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([assetId])
+  @@index([viewCount(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+}
+
+// Subscription - 用户订阅
+model Subscription {
+  id        String   @id @default(cuid())
+  userId    String
+  
+  // Subscription Type
+  tag       String   // e.g., "BTC", "high-volume", "new-listings", "whale-alerts"
+  
+  // Settings
+  enabled   Boolean  @default(true)
+  channels  String[] // email, push, telegram
+  
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([userId, tag])
+  @@index([userId])
+  @@index([tag])
+  @@index([enabled])
+}
+
+// ============================================
+// Analytics & Job Models
+// ============================================
+
+model JobRun {
+  id           String   @id @default(cuid())
+  jobName      String   // fetch-pairs, make-signals, embed-terms
+  status       String   // pending, running, success, failed
+  startedAt    DateTime @default(now())
+  completedAt  DateTime?
+  duration     Int?     // milliseconds
+  
+  // Results
+  processed    Int      @default(0)
+  succeeded    Int      @default(0)
+  failed       Int      @default(0)
+  errorMessage String?  @db.Text
+  metadata     Json?
+  
+  @@index([jobName])
+  @@index([status])
+  @@index([startedAt(sort: Desc)])
+}
+
+model Analytics {
+  id        String   @id @default(cuid())
+  date      DateTime @default(now()) @db.Date
+  
+  // Metrics
+  pageViews Int      @default(0)
+  users     Int      @default(0)
+  signals   Int      @default(0)
+  shares    Int      @default(0)
+  
+  // Top Items (JSON arrays)
+  topAssets Json?
+  topPairs  Json?
+  
+  @@unique([date])
+  @@index([date(sort: Desc)])
+}
+
+// ============================================
+// Raw Metrics Cache (原始指标缓存)
+// ============================================
+
+model RawMetric {
+  id        String   @id @default(cuid())
+  
+  // 关联
+  assetId   String?
+  pairId    String?
+  
+  // 指标类型
+  metricType String  // candle, liquidity, holder, wallet
+  window     String? // 5m, 15m, 1h, 4h, 1d (for candles)
+  
+  // 原始数据 (JSON)
+  data       Json
+  
+  // 元数据
+  source     String  // 数据源名称
+  fetchedAt  DateTime @default(now())
+  expiresAt  DateTime?
+  
+  @@index([assetId, metricType])
+  @@index([pairId, metricType])
+  @@index([metricType, window])
+  @@index([fetchedAt(sort: Desc)])
+  @@index([expiresAt])
+}

@@ -1,0 +1,1028 @@
+openapi: 3.0.3
+info:
+  title: HotScan API
+  description: |
+    HotScan - 加密货币/DeFi 热点雷达 API
+    
+    实时监控加密资产交易信号、流动性变化和风险评估。
+    
+    ## 主要功能
+    - 📊 交易信号查询和分析
+    - 💎 加密资产详情和指标
+    - 🤖 AI 驱动的术语问答（RAG）
+    - 📱 分享海报生成
+    - ⚙️ 后台任务触发（需要认证）
+    
+    ## 认证
+    受保护的端点需要在请求头中提供 `X-Cron-Secret`。
+    
+  version: 2.0.0
+  contact:
+    name: HotScan API Support
+    email: support@hotscan.io
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://hotscan.vercel.app
+    description: Production Server
+  - url: http://localhost:3000
+    description: Development Server
+
+tags:
+  - name: Signals
+    description: 交易信号查询和分析
+  - name: Assets
+    description: 加密资产信息
+  - name: Learn
+    description: AI 术语问答（RAG）
+  - name: Share
+    description: 分享海报生成
+  - name: Jobs
+    description: 后台任务触发（需要认证）
+
+paths:
+  /api/signals:
+    get:
+      tags:
+        - Signals
+      summary: 获取交易信号列表
+      description: |
+        查询交易信号，按创建时间和风险分数降序排序。
+        
+        **排序规则**：
+        1. createdAt DESC（最新优先）
+        2. riskScore DESC（高风险优先）
+        
+        **性能优化**：使用复合索引 `(createdAt, riskScore)` 提升查询速度。
+        
+      operationId: getSignals
+      parameters:
+        - name: window
+          in: query
+          description: 时间窗口过滤
+          required: false
+          schema:
+            type: string
+            enum: [5m, 15m, 1h, 4h, 1d]
+            example: 1h
+        - name: limit
+          in: query
+          description: 返回结果数量
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+            example: 20
+        - name: minRiskScore
+          in: query
+          description: 最低风险分数过滤
+          required: false
+          schema:
+            type: number
+            minimum: 0
+            maximum: 100
+            example: 60
+        - name: assetSymbol
+          in: query
+          description: 资产符号过滤
+          required: false
+          schema:
+            type: string
+            example: BTC
+        - name: sentiment
+          in: query
+          description: 市场情绪过滤
+          required: false
+          schema:
+            type: string
+            enum: [bullish, bearish, neutral]
+            example: bullish
+      responses:
+        '200':
+          description: 成功返回信号列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SignalWithAsset'
+                  meta:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                        example: 125
+                      limit:
+                        type: integer
+                        example: 20
+                      window:
+                        type: string
+                        example: 1h
+              examples:
+                success:
+                  summary: 成功响应示例
+                  value:
+                    success: true
+                    data:
+                      - id: clx123abc
+                        assetId: clx456def
+                        window: 1h
+                        priceChangePct: 3.45
+                        currentPrice: 67234.50
+                        volZScore: 2.8
+                        volumeUSD: 1250000000
+                        liqDeltaPct: 1.2
+                        totalLiquidityUSD: 850000000
+                        top5HoldPct: 8.5
+                        holderCount: 45678901
+                        newWalletNetBuy: 340000
+                        newWalletCount: 1234
+                        riskScore: 35.5
+                        contractAgeDays: 5475
+                        sentiment: bullish
+                        aiSummary: BTC稳健上涨，机构资金持续流入，风险较低
+                        alertLevel: low
+                        createdAt: '2024-10-01T12:00:00Z'
+                        asset:
+                          id: clx456def
+                          symbol: BTC
+                          name: Bitcoin
+                          chain: bitcoin
+                          logo: https://cryptologos.cc/logos/bitcoin-btc-logo.png
+                          decimals: 8
+                          isActive: true
+                      - id: clx789ghi
+                        assetId: clx012jkl
+                        window: 1h
+                        priceChangePct: 8.95
+                        currentPrice: 0.000001234
+                        volZScore: 4.2
+                        volumeUSD: 5800000
+                        liqDeltaPct: 3.8
+                        totalLiquidityUSD: 28500000
+                        top5HoldPct: 42.3
+                        holderCount: 89456
+                        newWalletNetBuy: 128000
+                        newWalletCount: 567
+                        riskScore: 68.5
+                        contractAgeDays: 365
+                        sentiment: bullish
+                        aiSummary: PEPE出现暴涨信号，成交量激增，但需注意高风险和集中持仓
+                        alertLevel: high
+                        createdAt: '2024-10-01T11:45:00Z'
+                        asset:
+                          id: clx012jkl
+                          symbol: PEPE
+                          name: Pepe
+                          chain: ethereum
+                          logo: https://cryptologos.cc/logos/pepe-pepe-logo.png
+                          decimals: 18
+                          isActive: true
+                    meta:
+                      total: 125
+                      limit: 20
+                      window: 1h
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/assets/{id}:
+    get:
+      tags:
+        - Assets
+      summary: 获取资产详情
+      description: |
+        获取指定资产的完整信息，包括：
+        - 基础信息（名称、符号、链等）
+        - 关联的交易对
+        - 最新的交易信号
+        - 统计数据
+        
+      operationId: getAssetById
+      parameters:
+        - name: id
+          in: path
+          description: 资产 ID
+          required: true
+          schema:
+            type: string
+            example: clx456def
+        - name: includeSignals
+          in: query
+          description: 是否包含最新信号
+          required: false
+          schema:
+            type: boolean
+            default: true
+        - name: includePairs
+          in: query
+          description: 是否包含交易对
+          required: false
+          schema:
+            type: boolean
+            default: true
+        - name: signalLimit
+          in: query
+          description: 返回的信号数量
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 5
+      responses:
+        '200':
+          description: 成功返回资产详情
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/AssetDetail'
+              examples:
+                success:
+                  summary: 成功响应示例
+                  value:
+                    success: true
+                    data:
+                      id: clx456def
+                      symbol: BTC
+                      name: Bitcoin
+                      chain: bitcoin
+                      logo: https://cryptologos.cc/logos/bitcoin-btc-logo.png
+                      decimals: 8
+                      isActive: true
+                      createdAt: '2024-01-01T00:00:00Z'
+                      updatedAt: '2024-10-01T12:00:00Z'
+                      pairs:
+                        - id: clxpair001
+                          dex: uniswap-v3
+                          address: '0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640'
+                          liquidityUSD: 125000000
+                          baseToken: USDC
+                          fee: 0.05
+                          isActive: true
+                      signals:
+                        - id: clx123abc
+                          window: 1h
+                          priceChangePct: 3.45
+                          currentPrice: 67234.50
+                          volZScore: 2.8
+                          riskScore: 35.5
+                          sentiment: bullish
+                          aiSummary: BTC稳健上涨，机构资金持续流入
+                          createdAt: '2024-10-01T12:00:00Z'
+                        - id: clx456def
+                          window: 4h
+                          priceChangePct: 1.56
+                          currentPrice: 67234.50
+                          volZScore: 1.2
+                          riskScore: 25.0
+                          sentiment: bullish
+                          aiSummary: BTC稳健上涨
+                          createdAt: '2024-10-01T11:00:00Z'
+                      stats:
+                        totalSignals: 1248
+                        avgRiskScore: 32.5
+                        last24hChange: 2.34
+                        totalLiquidity: 850000000
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/learn:
+    get:
+      tags:
+        - Learn
+      summary: RAG 术语问答
+      description: |
+        基于 RAG（检索增强生成）技术的金融术语智能问答。
+        
+        **工作流程**：
+        1. 将问题转换为向量（OpenAI Embeddings）
+        2. 在术语库中进行语义搜索（pgvector）
+        3. 使用 GPT-4 生成上下文相关的回答
+        
+        **特性**：
+        - 语义理解（不是关键词匹配）
+        - 知识来源追溯
+        - 相关术语推荐
+        
+      operationId: learnQuery
+      parameters:
+        - name: q
+          in: query
+          description: 问题或关键词
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 500
+            example: 什么是流动性池？
+        - name: language
+          in: query
+          description: 回答语言
+          required: false
+          schema:
+            type: string
+            enum: [zh, en]
+            default: zh
+            example: zh
+      responses:
+        '200':
+          description: 成功返回回答
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      answer:
+                        type: string
+                        description: AI 生成的回答
+                      sources:
+                        type: array
+                        description: 知识来源
+                        items:
+                          type: object
+                          properties:
+                            term:
+                              type: string
+                            definition:
+                              type: string
+                            category:
+                              type: string
+                            similarity:
+                              type: number
+                              description: 相似度分数 (0-1)
+                      relatedTerms:
+                        type: array
+                        description: 相关术语
+                        items:
+                          type: string
+                      confidence:
+                        type: number
+                        description: 回答置信度 (0-1)
+              examples:
+                success:
+                  summary: 成功响应示例
+                  value:
+                    success: true
+                    data:
+                      answer: |
+                        流动性池是 DeFi 中的智能合约，包含锁定的代币对，用于促进去中心化交易。
+                        用户可以将资产存入池中成为流动性提供者（LP），并赚取交易手续费。
+                        
+                        例如，在 Uniswap 的 ETH/USDC 池中，用户存入等值的 ETH 和 USDC，
+                        其他用户可以在该池中进行代币交换，LP 获得 0.3% 的手续费分成。
+                      sources:
+                        - term: Liquidity Pool
+                          definition: 流动性池是 DeFi 中的智能合约，包含锁定的代币对，用于促进去中心化交易。
+                          category: defi
+                          similarity: 0.95
+                        - term: AMM
+                          definition: 自动做市商（Automated Market Maker）是一种去中心化交易协议，使用数学公式来定价资产。
+                          category: defi
+                          similarity: 0.82
+                      relatedTerms:
+                        - Impermanent Loss
+                        - AMM
+                        - Liquidity Provider
+                        - Slippage
+                      confidence: 0.92
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/share:
+    post:
+      tags:
+        - Share
+      summary: 生成分享海报
+      description: |
+        生成 9:16 比例的分享海报图片。
+        
+        **生成流程**：
+        1. 接收资产和指标数据
+        2. 使用 Canvas/html-to-image 渲染海报
+        3. 上传到 CDN
+        4. 返回图片 URL
+        
+        **海报内容**：
+        - 资产名称和价格
+        - 关键指标（涨跌幅、风险分数等）
+        - AI 分析摘要
+        - 品牌水印和二维码
+        
+      operationId: createShare
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - assetId
+                - title
+              properties:
+                assetId:
+                  type: string
+                  description: 资产 ID
+                  example: clx456def
+                title:
+                  type: string
+                  description: 海报标题
+                  minLength: 1
+                  maxLength: 100
+                  example: BTC 突破 $67K 关键阻力
+                description:
+                  type: string
+                  description: 海报描述
+                  maxLength: 500
+                  example: 机构资金持续流入，风险评分低
+                metrics:
+                  type: object
+                  description: 显示的指标数据
+                  properties:
+                    price:
+                      type: number
+                      example: 67234.50
+                    change24h:
+                      type: number
+                      example: 3.45
+                    riskScore:
+                      type: number
+                      example: 35.5
+                    sentiment:
+                      type: string
+                      enum: [bullish, bearish, neutral]
+                      example: bullish
+                template:
+                  type: string
+                  description: 海报模板
+                  enum: [signal, analysis, alert]
+                  default: signal
+                  example: signal
+            examples:
+              signal:
+                summary: 交易信号海报
+                value:
+                  assetId: clx456def
+                  title: BTC 突破 $67K 关键阻力
+                  description: 机构资金持续流入，风险评分低
+                  metrics:
+                    price: 67234.50
+                    change24h: 3.45
+                    riskScore: 35.5
+                    sentiment: bullish
+                  template: signal
+      responses:
+        '201':
+          description: 成功生成海报
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      shareId:
+                        type: string
+                        description: 分享 ID
+                        example: clxshare001
+                      imageUrl:
+                        type: string
+                        format: uri
+                        description: 海报图片 URL
+                        example: https://cdn.hotscan.io/shares/clxshare001.png
+                      shareUrl:
+                        type: string
+                        format: uri
+                        description: 分享页面 URL
+                        example: https://hotscan.vercel.app/share/clxshare001
+                      expiresAt:
+                        type: string
+                        format: date-time
+                        description: 过期时间
+                        example: '2024-10-08T12:00:00Z'
+              examples:
+                success:
+                  summary: 成功响应示例
+                  value:
+                    success: true
+                    data:
+                      shareId: clxshare001
+                      imageUrl: https://cdn.hotscan.io/shares/clxshare001.png
+                      shareUrl: https://hotscan.vercel.app/share/clxshare001
+                      expiresAt: '2024-10-08T12:00:00Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/jobs/fetch-tickers:
+    post:
+      tags:
+        - Jobs
+      summary: 触发数据抓取任务
+      description: |
+        触发后台任务，抓取最新的加密资产价格、成交量和流动性数据。
+        
+        **数据源**：
+        - Alpha Vantage（股票）
+        - CoinGecko（加密货币）
+        - DEX APIs（交易对）
+        
+        **需要认证**：需要提供 `X-Cron-Secret` 头。
+        
+        **触发方式**：
+        - Vercel Cron
+        - GitHub Actions
+        - 手动触发
+        
+      operationId: triggerFetchTickers
+      security:
+        - CronSecret: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                force:
+                  type: boolean
+                  description: 是否强制刷新缓存
+                  default: false
+                limit:
+                  type: integer
+                  description: 抓取数量限制
+                  minimum: 1
+                  maximum: 100
+                  default: 50
+      responses:
+        '200':
+          description: 任务成功触发
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+              examples:
+                success:
+                  summary: 成功响应示例
+                  value:
+                    success: true
+                    data:
+                      jobId: clxjob001
+                      jobName: fetch-tickers
+                      status: running
+                      startedAt: '2024-10-01T12:00:00Z'
+                      message: 数据抓取任务已启动
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/jobs/make-signals:
+    post:
+      tags:
+        - Jobs
+      summary: 触发信号生成任务
+      description: |
+        触发后台任务，基于最新数据生成交易信号。
+        
+        **分析维度**：
+        - 价格变化
+        - 成交量异常（Z-Score）
+        - 流动性变化
+        - 持仓集中度
+        - 新钱包活动
+        - AI 情绪分析
+        
+        **需要认证**：需要提供 `X-Cron-Secret` 头。
+        
+        **触发方式**：
+        - Vercel Cron（每5分钟）
+        - GitHub Actions（定时）
+        - 手动触发
+        
+      operationId: triggerMakeSignals
+      security:
+        - CronSecret: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                windows:
+                  type: array
+                  description: 分析的时间窗口
+                  items:
+                    type: string
+                    enum: [5m, 15m, 1h, 4h, 1d]
+                  default: [5m, 1h, 4h]
+                minVolume:
+                  type: number
+                  description: 最低成交量过滤（USD）
+                  default: 100000
+      responses:
+        '200':
+          description: 任务成功触发
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+              examples:
+                success:
+                  summary: 成功响应示例
+                  value:
+                    success: true
+                    data:
+                      jobId: clxjob002
+                      jobName: make-signals
+                      status: running
+                      startedAt: '2024-10-01T12:00:00Z'
+                      message: 信号生成任务已启动
+                      metadata:
+                        windows: [5m, 1h, 4h]
+                        estimatedDuration: 60
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    CronSecret:
+      type: apiKey
+      in: header
+      name: X-Cron-Secret
+      description: |
+        Cron 任务认证密钥。
+        在环境变量 `CRON_SECRET` 中配置。
+
+  schemas:
+    Asset:
+      type: object
+      properties:
+        id:
+          type: string
+          example: clx456def
+        symbol:
+          type: string
+          example: BTC
+        name:
+          type: string
+          example: Bitcoin
+        chain:
+          type: string
+          example: bitcoin
+        logo:
+          type: string
+          format: uri
+          example: https://cryptologos.cc/logos/bitcoin-btc-logo.png
+        decimals:
+          type: integer
+          example: 8
+        isActive:
+          type: boolean
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Signal:
+      type: object
+      properties:
+        id:
+          type: string
+        assetId:
+          type: string
+        window:
+          type: string
+          enum: [5m, 15m, 1h, 4h, 1d]
+        priceChangePct:
+          type: number
+          description: 价格变化百分比
+        currentPrice:
+          type: number
+          description: 当前价格
+        volZScore:
+          type: number
+          description: 成交量 Z-Score
+        volumeUSD:
+          type: number
+          description: 成交量（美元）
+        liqDeltaPct:
+          type: number
+          description: 流动性变化百分比
+        totalLiquidityUSD:
+          type: number
+          description: 总流动性（美元）
+        top5HoldPct:
+          type: number
+          description: 前5大持仓占比
+        holderCount:
+          type: integer
+          description: 持仓地址数
+        newWalletNetBuy:
+          type: number
+          description: 新钱包净买入（美元）
+        newWalletCount:
+          type: integer
+          description: 新钱包数量
+        riskScore:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: 风险评分
+        contractAgeDays:
+          type: integer
+          description: 合约年龄（天）
+        sentiment:
+          type: string
+          enum: [bullish, bearish, neutral]
+          description: 市场情绪
+        aiSummary:
+          type: string
+          description: AI 分析摘要
+        alertLevel:
+          type: string
+          enum: [low, medium, high, critical]
+          description: 警报级别
+        createdAt:
+          type: string
+          format: date-time
+
+    SignalWithAsset:
+      allOf:
+        - $ref: '#/components/schemas/Signal'
+        - type: object
+          properties:
+            asset:
+              $ref: '#/components/schemas/Asset'
+
+    Pair:
+      type: object
+      properties:
+        id:
+          type: string
+        assetId:
+          type: string
+        dex:
+          type: string
+          example: uniswap-v3
+        address:
+          type: string
+          example: '0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640'
+        liquidityUSD:
+          type: number
+          example: 125000000
+        baseToken:
+          type: string
+          example: USDC
+        fee:
+          type: number
+          example: 0.05
+        isActive:
+          type: boolean
+          example: true
+
+    AssetDetail:
+      allOf:
+        - $ref: '#/components/schemas/Asset'
+        - type: object
+          properties:
+            pairs:
+              type: array
+              items:
+                $ref: '#/components/schemas/Pair'
+            signals:
+              type: array
+              items:
+                $ref: '#/components/schemas/Signal'
+            stats:
+              type: object
+              properties:
+                totalSignals:
+                  type: integer
+                avgRiskScore:
+                  type: number
+                last24hChange:
+                  type: number
+                totalLiquidity:
+                  type: number
+
+    JobResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            jobId:
+              type: string
+            jobName:
+              type: string
+            status:
+              type: string
+              enum: [pending, running, success, failed]
+            startedAt:
+              type: string
+              format: date-time
+            message:
+              type: string
+            metadata:
+              type: object
+              additionalProperties: true
+
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: 错误代码
+            message:
+              type: string
+              description: 错误消息
+            details:
+              type: object
+              description: 详细信息
+              additionalProperties: true
+            timestamp:
+              type: string
+              format: date-time
+              description: 错误时间
+
+  responses:
+    BadRequest:
+      description: 请求参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            validation:
+              summary: 参数验证失败
+              value:
+                success: false
+                error:
+                  code: VALIDATION_ERROR
+                  message: 请求参数验证失败
+                  details:
+                    field: window
+                    constraint: 必须是 5m, 15m, 1h, 4h, 1d 之一
+                  timestamp: '2024-10-01T12:00:00Z'
+            missing:
+              summary: 缺少必需参数
+              value:
+                success: false
+                error:
+                  code: MISSING_PARAMETER
+                  message: 缺少必需参数
+                  details:
+                    field: q
+                    type: string
+                  timestamp: '2024-10-01T12:00:00Z'
+
+    Unauthorized:
+      description: 未授权或认证失败
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missing:
+              summary: 缺少认证信息
+              value:
+                success: false
+                error:
+                  code: UNAUTHORIZED
+                  message: 缺少或无效的认证凭证
+                  details:
+                    required: X-Cron-Secret header
+                  timestamp: '2024-10-01T12:00:00Z'
+            invalid:
+              summary: 认证凭证无效
+              value:
+                success: false
+                error:
+                  code: INVALID_CREDENTIALS
+                  message: 认证凭证无效
+                  timestamp: '2024-10-01T12:00:00Z'
+
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            asset:
+              summary: 资产不存在
+              value:
+                success: false
+                error:
+                  code: NOT_FOUND
+                  message: 未找到指定的资产
+                  details:
+                    assetId: clx456def
+                  timestamp: '2024-10-01T12:00:00Z'
+
+    TooManyRequests:
+      description: 请求频率超限
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            rateLimit:
+              summary: 超过频率限制
+              value:
+                success: false
+                error:
+                  code: RATE_LIMIT_EXCEEDED
+                  message: 请求频率超过限制
+                  details:
+                    limit: 100
+                    window: 60
+                    retryAfter: 30
+                  timestamp: '2024-10-01T12:00:00Z'
+
+    InternalServerError:
+      description: 服务器内部错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            server:
+              summary: 服务器错误
+              value:
+                success: false
+                error:
+                  code: INTERNAL_SERVER_ERROR
+                  message: 服务器内部错误，请稍后重试
+                  details:
+                    requestId: req_abc123
+                  timestamp: '2024-10-01T12:00:00Z'
+            database:
+              summary: 数据库错误
+              value:
+                success: false
+                error:
+                  code: DATABASE_ERROR
+                  message: 数据库连接失败
+                  timestamp: '2024-10-01T12:00:00Z'
