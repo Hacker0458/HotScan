@@ -10,6 +10,61 @@
 
 ---
 
+## 🚀 快速部署到 Vercel
+
+### 一键部署
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/your-username/hotscan)
+
+### 手动部署步骤
+
+1. **在 Vercel 新建项目**
+   - 访问 [vercel.com](https://vercel.com) 并登录
+   - 点击 "Add New" > "Project"
+   - 选择 "Import Git Repository"
+
+2. **配置环境变量**（参考 [VERCEL_ENV.md](./VERCEL_ENV.md)）
+   
+   **必需变量：**
+   ```
+   DATABASE_URL=postgresql://user:password@host:5432/database
+   NEXTAUTH_URL=https://your-domain.vercel.app
+   NEXTAUTH_SECRET=your-secret-key-min-32-chars
+   OPENAI_API_KEY=sk-...
+   OPENAI_API_BASE=https://api.openai.com/v1
+   DATASOURCE=dexscreener
+   MOCK_AI=0
+   ```
+
+3. **部署**
+   - 点击 "Deploy" 按钮
+   - 等待构建完成（约 2-5 分钟）
+   - 获取生产域名：`https://hotscan-xxx.vercel.app`
+
+4. **更新 NEXTAUTH_URL**
+   - 部署完成后，在 Vercel Settings > Environment Variables
+   - 更新 `NEXTAUTH_URL` 为实际的 Vercel 域名
+   - 点击 "Redeploy" 使更改生效
+
+5. **运行数据库迁移**（首次部署）
+   ```bash
+   # 在本地运行
+   DATABASE_URL=<your-production-db-url> npx prisma migrate deploy
+   DATABASE_URL=<your-production-db-url> npx prisma db seed
+   ```
+
+6. **启用定时任务**（参考下方"定时任务配置"）
+
+### 验证部署
+
+访问以下端点验证部署成功：
+- `https://your-domain.vercel.app/` - 首页
+- `https://your-domain.vercel.app/api/signals?limit=3` - API
+- `https://your-domain.vercel.app/learn` - RAG 问答
+- `https://your-domain.vercel.app/analytics` - 数据统计
+
+---
+
 ## ⚠️ 重要声明
 
 **本平台仅提供信息展示服务，不提供任何买卖、交易功能。所有内容均非投资建议，不构成任何投资推荐，不做任何收益承诺。加密货币投资存在极高风险，您可能损失全部投资。请在充分了解风险的基础上，理性、谨慎地做出投资决策。**
@@ -680,4 +735,173 @@ pnpm dev
 pnpm jobs:fetch   # 拉取数据
 pnpm jobs:signals # 生成信号
 ```
+
+
+## ⏰ 定时任务配置
+
+HotScan 支持两种定时任务方案：
+
+### 方案一：GitHub Actions（推荐）
+
+**优点**：免费、可靠、易于监控
+
+**配置步骤**：
+
+1. **配置 GitHub Secrets**
+   
+   在仓库 Settings > Secrets and variables > Actions 中添加：
+   
+   ```
+   DATABASE_URL          - 数据库连接字符串
+   OPENAI_API_KEY        - OpenAI API 密钥
+   OPENAI_API_BASE       - OpenAI API 基础 URL
+   DATASOURCE            - 数据源类型（dexscreener）
+   ```
+
+2. **启用 GitHub Actions**
+   
+   工作流文件 `.github/workflows/cron.yml` 已配置为每 30 分钟运行一次：
+   
+   ```yaml
+   schedule:
+     - cron: '*/30 * * * *'  # 每 30 分钟
+   ```
+
+3. **手动触发**（可选）
+   
+   在 GitHub Actions 页面可以手动触发 "Scheduled Data Fetch" 工作流进行测试。
+
+### 方案二：Vercel Cron Jobs
+
+**优点**：与 Vercel 部署集成、无需额外服务
+
+**配置步骤**：
+
+1. **生成 JOB_TOKEN**
+   
+   ```bash
+   openssl rand -hex 32
+   ```
+   
+   在 Vercel 环境变量中添加：
+   ```
+   JOB_TOKEN=<生成的随机字符串>
+   ```
+
+2. **配置 Vercel Cron**
+   
+   在 Vercel 项目 Settings > Cron Jobs 中添加：
+   
+   - **Schedule**: `*/30 * * * *` (每 30 分钟)
+   - **Path**: `/api/jobs/run`
+   - **Method**: `POST`
+   - **Headers**:
+     ```
+     Authorization: Bearer <your-JOB_TOKEN>
+     ```
+
+3. **验证配置**
+   
+   手动调用测试：
+   
+   ```bash
+   curl -X POST https://your-domain.vercel.app/api/jobs/run \
+     -H "Authorization: Bearer <your-JOB_TOKEN>"
+   ```
+
+### 任务说明
+
+定时任务会依次执行：
+
+1. **fetch-tickers**: 从 DexScreener 拉取 10 个主流代币的最新数据
+2. **make-signals**: 基于最新数据生成交易信号和风险评分
+
+预计总耗时：60-90 秒
+
+### 监控与日志
+
+- **GitHub Actions**: 在 Actions 页面查看运行历史和日志
+- **Vercel Cron**: 在 Vercel 项目 > Deployments > Functions 查看日志
+
+
+## ✅ 上线后要做的三件事
+
+### 1. 填写 Vercel 环境变量
+
+特别注意以下变量：
+
+- ✅ **NEXTAUTH_URL**: 更新为实际的 Vercel 域名
+  ```
+  https://hotscan-xxx.vercel.app
+  ```
+
+- ✅ **DATABASE_URL**: 确保生产数据库地址正确
+
+- ✅ **OPENAI_API_KEY**: 确认 API 密钥有效且有足够配额
+
+填写完成后，点击 "Redeploy" 使环境变量生效。
+
+### 2. 开启定时任务
+
+**选择一种方案：**
+
+#### 方案 A: GitHub Actions（推荐）
+
+1. 在 GitHub 仓库配置 Secrets（参考上方"定时任务配置"）
+2. 确认 `.github/workflows/cron.yml` 文件存在
+3. 在 GitHub Actions 页面手动触发一次测试
+4. 验证任务运行成功
+
+#### 方案 B: Vercel Cron Jobs
+
+1. 生成 `JOB_TOKEN` 并添加到 Vercel 环境变量
+2. 在 Vercel Settings > Cron Jobs 添加任务
+3. 手动调用 `/api/jobs/run` 端点测试
+4. 确认日志中显示成功
+
+### 3. 运行健康检查
+
+在本地运行自检脚本验证部署：
+
+```bash
+PROD_URL=https://your-domain.vercel.app pnpm tsx scripts/post-deploy-check.ts
+```
+
+**预期输出：**
+
+```
+🚀 HotScan Post-Deployment Health Check
+🌐 Production URL: https://hotscan-xxx.vercel.app
+
+🔍 Checking: Signals API
+   ✅ PASS (234ms)
+
+🔍 Checking: Learn API (RAG)
+   ✅ PASS (1456ms)
+
+🔍 Checking: Homepage
+   ✅ PASS (187ms)
+
+🔍 Checking: Analytics Page
+   ✅ PASS (156ms)
+
+📊 Summary
+✅ Passed: 4/4
+❌ Failed: 0/4
+⏱️  Total duration: 2033ms
+
+✨ All checks passed! Deployment is healthy.
+```
+
+### 4. 打开分析面板
+
+访问 `https://your-domain.vercel.app/analytics` 观察统计数据：
+
+- 📊 Signals 数量
+- 🪙 Assets 数量
+- 📚 Terms 数量
+- 📱 Shares 数量
+- 👥 Subscriptions 数量
+
+如果数据为空，手动运行定时任务或等待自动执行。
 

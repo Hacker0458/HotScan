@@ -1,14 +1,12 @@
 {
-  "buildCommand": "pnpm build",
-  "devCommand": "pnpm dev",
+  "functions": {
+    "api/**/*.js": {
+      "runtime": "nodejs20.x"
+    }
+  },
   "installCommand": "pnpm install",
+  "buildCommand": "pnpm build",
   "framework": "nextjs",
-  "regions": ["iad1", "hkg1", "sin1"],
-  "env": {
-    "DATABASE_URL": "@database_url",
-    "NEXTAUTH_URL": "@nextauth_url",
-    "NEXTAUTH_SECRET": "@nextauth_secret",
-    "OPENAI_API_KEY": "@openai_api_key",
-    "OPENAI_API_BASE": "@openai_api_base"
-  }
+  "ignoreCommand": "echo ok",
+  "regions": ["iad1", "hkg1", "sin1"]
 }
