@@ -1,10 +1,9 @@
 /**
- * DexScreener API 数据源
- * 
- * 提供加密货币交易对的实时数据
+ * DexScreener 数据源客户端
+ * 提供实时 DEX 交易对数据
  */
 
-const DEXSCREENER_BASE = 'https://api.dexscreener.com/latest/dex'
+const DEXSCREENER_BASE = process.env.DEXSCREENER_BASE || 'https://api.dexscreener.com'
 
 export interface DexPair {
   chainId: string
@@ -50,204 +49,150 @@ export interface DexPair {
   pairCreatedAt?: number
 }
 
-export interface TokenResponse {
-  schemaVersion: string
-  pairs: DexPair[] | null
-}
-
 export interface SearchResponse {
   schemaVersion: string
   pairs: DexPair[] | null
 }
 
-/**
- * 获取指定代币的交易对信息
- */
-export async function fetchTokenPairs(tokenAddress: string): Promise<DexPair[]> {
-  try {
-    const response = await fetch(`${DEXSCREENER_BASE}/tokens/${tokenAddress}`)
-    
-    if (!response.ok) {
-      console.error(`DexScreener API error: ${response.status}`)
-      return []
-    }
-    
-    const data: TokenResponse = await response.json()
-    return data.pairs || []
-  } catch (error) {
-    console.error('Error fetching token pairs:', error)
-    return []
-  }
+interface DataSourceResult {
+  mock: boolean
+  pairs: DexPair[]
 }
 
 /**
- * 搜索代币（按 symbol 或名称）
+ * 带重试和超时的 fetch 请求
  */
-export async function searchToken(query: string): Promise<DexPair[]> {
-  try {
-    const response = await fetch(`${DEXSCREENER_BASE}/search?q=${encodeURIComponent(query)}`)
-    
-    if (!response.ok) {
-      console.error(`DexScreener search error: ${response.status}`)
-      return []
-    }
-    
-    const data: SearchResponse = await response.json()
-    return data.pairs || []
-  } catch (error) {
-    console.error('Error searching token:', error)
-    return []
-  }
-}
+async function fetchWithRetry(url: string, maxRetries = 2): Promise<Response | null> {
+  let lastError: Error | null = null
 
-/**
- * 获取特定链上的交易对
- */
-export async function fetchPairByAddress(chain: string, pairAddress: string): Promise<DexPair | null> {
-  try {
-    const response = await fetch(`${DEXSCREENER_BASE}/pairs/${chain}/${pairAddress}`)
-    
-    if (!response.ok) {
-      console.error(`DexScreener pair error: ${response.status}`)
-      return null
-    }
-    
-    const data = await response.json()
-    return data.pair || null
-  } catch (error) {
-    console.error('Error fetching pair:', error)
-    return null
-  }
-}
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000) // 15s timeout
 
-/**
- * 统一数据源接口
- */
-export interface IDataSource {
-  fetchRecent(symbols: string[]): Promise<Array<{
-    symbol: string
-    name: string
-    chain: string
-    price: number
-    priceChange: {
-      m5: number
-      h1: number
-      h24: number
-    }
-    volume: {
-      h1: number
-      h24: number
-    }
-    liquidity: number
-    fdv?: number
-    contractAgeDays?: number
-  }>>
-}
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'HotScan/1.0'
+        }
+      })
 
-/**
- * DexScreener 数据源实现
- */
-export class DexScreenerDataSource implements IDataSource {
-  async fetchRecent(symbols: string[]) {
-    const results = []
-    
-    for (const symbol of symbols) {
-      try {
-        console.log(`[DexScreener] Fetching ${symbol}...`)
+      clearTimeout(timeoutId)
+
+      // 检查状态码
+      if (response.ok) {
+        return response
+      }
+
+      // 429 或 5xx 需要重试
+      if (response.status === 429 || response.status >= 500) {
+        lastError = new Error(`HTTP ${response.status}`)
         
-        const pairs = await searchToken(symbol)
-        
-        if (!pairs || pairs.length === 0) {
-          console.warn(`[DexScreener] No pairs found for ${symbol}`)
+        if (attempt < maxRetries) {
+          const backoffMs = Math.pow(2, attempt) * 1000
+          console.warn(`⚠️  DexScreener API ${response.status}, 重试 ${attempt + 1}/${maxRetries} (等待 ${backoffMs}ms)`)
+          await new Promise(resolve => setTimeout(resolve, backoffMs))
           continue
         }
-        
-        // 选择流动性最高的交易对
-        const bestPair = pairs.sort((a, b) => {
-          const liquidityA = a.liquidity?.usd || 0
-          const liquidityB = b.liquidity?.usd || 0
-          return liquidityB - liquidityA
-        })[0]
-        
-        // 计算合约年龄（天数）
-        let contractAgeDays: number | undefined
-        if (bestPair.pairCreatedAt) {
-          const ageMs = Date.now() - bestPair.pairCreatedAt
-          contractAgeDays = Math.floor(ageMs / (1000 * 60 * 60 * 24))
-        }
-        
-        results.push({
-          symbol: bestPair.baseToken.symbol,
-          name: bestPair.baseToken.name,
-          chain: bestPair.chainId,
-          price: parseFloat(bestPair.priceUsd || '0'),
-          priceChange: {
-            m5: bestPair.priceChange.m5,
-            h1: bestPair.priceChange.h1,
-            h24: bestPair.priceChange.h24,
-          },
-          volume: {
-            h1: bestPair.volume.h1,
-            h24: bestPair.volume.h24,
-          },
-          liquidity: bestPair.liquidity?.usd || 0,
-          fdv: bestPair.fdv,
-          contractAgeDays,
-        })
-        
-        console.log(`[DexScreener] ✓ ${symbol}: $${bestPair.priceUsd}, liquidity: $${bestPair.liquidity?.usd?.toLocaleString()}`)
-        
-        // 避免请求过快
-        await new Promise(resolve => setTimeout(resolve, 300))
-      } catch (error) {
-        console.error(`[DexScreener] Error fetching ${symbol}:`, error)
       }
+
+      // 其他错误不重试
+      return response
+
+    } catch (error: any) {
+      lastError = error
+      
+      if (attempt < maxRetries && (error.name === 'AbortError' || error.name === 'TypeError')) {
+        const backoffMs = Math.pow(2, attempt) * 1000
+        console.warn(`⚠️  网络错误, 重试 ${attempt + 1}/${maxRetries} (等待 ${backoffMs}ms)`)
+        await new Promise(resolve => setTimeout(resolve, backoffMs))
+        continue
+      }
+      
+      break
     }
+  }
+
+  console.error('❌ DexScreener API 请求失败:', lastError?.message || 'Unknown error')
+  return null
+}
+
+/**
+ * 搜索顶级交易对
+ * @param q 查询字符串 (symbol)
+ * @param limit 返回数量
+ */
+export async function searchTopPairs({ q, limit = 4 }: { q: string; limit?: number }): Promise<DataSourceResult> {
+  try {
+    const url = `${DEXSCREENER_BASE}/latest/dex/search?q=${encodeURIComponent(q)}`
+    console.log(`🔍 查询 DexScreener: ${q}`)
     
-    return results
+    const response = await fetchWithRetry(url)
+
+    if (!response || !response.ok) {
+      console.warn(`⚠️  DexScreener API 失败 (${q}): ${response?.status || 'no response'}`)
+      return { mock: true, pairs: [] }
+    }
+
+    const data: SearchResponse = await response.json()
+    const pairs = data.pairs || []
+
+    // 按 liquidityUsd 降序排序并取前 limit 个
+    const sortedPairs = pairs
+      .filter(p => p.liquidity?.usd !== undefined && p.liquidity.usd > 0)
+      .sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))
+      .slice(0, limit)
+
+    console.log(`  ✅ 找到 ${sortedPairs.length} 个交易对（流动性最高）`)
+
+    return { mock: false, pairs: sortedPairs }
+  } catch (error: any) {
+    console.error(`❌ 查询 ${q} 失败:`, error.message)
+    return { mock: true, pairs: [] }
   }
 }
 
 /**
- * Mock 数据源（回退）
+ * 批量查询交易对详情
+ * @param chain 链ID
+ * @param pairAddresses 交易对地址数组
  */
-export class MockDataSource implements IDataSource {
-  async fetchRecent(symbols: string[]) {
-    console.log('[MockDataSource] Using mock data for:', symbols.join(', '))
+export async function fetchPairsByAddresses({ 
+  chain, 
+  pairAddresses 
+}: { 
+  chain: string
+  pairAddresses: string[] 
+}): Promise<DataSourceResult> {
+  if (pairAddresses.length === 0) {
+    return { mock: false, pairs: [] }
+  }
+
+  try {
+    const addresses = pairAddresses.join(',')
+    const url = `${DEXSCREENER_BASE}/latest/dex/pairs/${chain}/${addresses}`
     
-    return symbols.map(symbol => ({
-      symbol,
-      name: `${symbol} Token`,
-      chain: 'ethereum',
-      price: Math.random() * 1000,
-      priceChange: {
-        m5: (Math.random() - 0.5) * 20,
-        h1: (Math.random() - 0.5) * 15,
-        h24: (Math.random() - 0.5) * 30,
-      },
-      volume: {
-        h1: Math.random() * 1000000,
-        h24: Math.random() * 10000000,
-      },
-      liquidity: Math.random() * 5000000,
-      fdv: Math.random() * 100000000,
-      contractAgeDays: Math.floor(Math.random() * 365),
-    }))
+    const response = await fetchWithRetry(url)
+
+    if (!response || !response.ok) {
+      console.warn(`⚠️  DexScreener API 失败 (${chain}/${addresses}): ${response?.status || 'no response'}`)
+      return { mock: true, pairs: [] }
+    }
+
+    const data: SearchResponse = await response.json()
+    return { mock: false, pairs: data.pairs || [] }
+  } catch (error: any) {
+    console.error(`❌ 查询 ${chain}/${pairAddresses.join(',')} 失败:`, error.message)
+    return { mock: true, pairs: [] }
   }
 }
 
 /**
  * 获取数据源实例
  */
-export function getDataSource(): IDataSource {
-  const datasource = process.env.DATASOURCE || 'dexscreener'
-  
-  if (datasource === 'mock') {
-    console.log('[DataSource] Using MockDataSource')
-    return new MockDataSource()
+export function getDataSource() {
+  return {
+    searchTopPairs,
+    fetchPairsByAddresses
   }
-  
-  console.log('[DataSource] Using DexScreenerDataSource')
-  return new DexScreenerDataSource()
 }
-

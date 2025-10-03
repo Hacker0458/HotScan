@@ -1,12 +1,6 @@
 {
-  "functions": {
-    "api/**/*.js": {
-      "runtime": "nodejs20.x"
-    }
-  },
   "installCommand": "pnpm install",
   "buildCommand": "pnpm build",
   "framework": "nextjs",
-  "ignoreCommand": "echo ok",
-  "regions": ["iad1", "hkg1", "sin1"]
+  "ignoreCommand": "echo ok"
 }

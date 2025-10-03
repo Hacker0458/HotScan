@@ -77,8 +77,11 @@ async function main() {
     prisma.pair.create({
       data: {
         assetId: assets[1].id, // ETH
+        dexId: 'uniswap-v3',
         dex: 'uniswap-v3',
+        pairAddress: '0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640',
         address: '0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640',
+        chainId: 'ethereum',
         liquidityUSD: 125000000,
         baseToken: 'USDC',
         fee: 0.05,
@@ -87,8 +90,11 @@ async function main() {
     prisma.pair.create({
       data: {
         assetId: assets[2].id, // PEPE
+        dexId: 'uniswap-v2',
         dex: 'uniswap-v2',
+        pairAddress: '0xa43fe16908251ee70ef74718545e4fe6c5ccec9f',
         address: '0xa43fe16908251ee70ef74718545e4fe6c5ccec9f',
+        chainId: 'ethereum',
         liquidityUSD: 28500000,
         baseToken: 'WETH',
         fee: 0.3,
@@ -97,8 +103,11 @@ async function main() {
     prisma.pair.create({
       data: {
         assetId: assets[3].id, // SOL
+        dexId: 'raydium',
         dex: 'raydium',
+        pairAddress: 'EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U',
         address: 'EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U',
+        chainId: 'solana',
         liquidityUSD: 45000000,
         baseToken: 'USDC',
         fee: 0.25,

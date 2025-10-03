@@ -1,114 +1,42 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { fetchTickers } from '@/jobs/fetch-tickers'
-import { makeSignals } from '@/jobs/make-signals'
+import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
-export const runtime = 'nodejs'
-export const maxDuration = 300 // 5 minutes
 
-/**
- * Protected Job Runner API
- * 
- * 用于 Vercel Cron Jobs 触发定时任务
- * 需要 JOB_TOKEN 环境变量进行身份验证
- */
-export async function POST(request: NextRequest) {
-  const startTime = Date.now()
+export async function GET(req: Request) {
+  const url = new URL(req.url)
+  const token = url.searchParams.get('token') || ''
+  const JOB_TOKEN = process.env.JOB_TOKEN || ''
+  
+  if (!JOB_TOKEN) {
+    return NextResponse.json({ ok: false, error: 'JOB_TOKEN not set' }, { status: 500 })
+  }
+  
+  if (token !== JOB_TOKEN) {
+    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+  }
+  
+  const started = Date.now()
   
   try {
-    // 1. 验证 JOB_TOKEN
-    const authHeader = request.headers.get('authorization')
-    const expectedToken = process.env.JOB_TOKEN
+    // 动态导入并执行 fetch-tickers
+    const { fetchTickers } = await import('@/jobs/fetch-tickers')
+    const r1 = await fetchTickers()
     
-    if (!expectedToken) {
-      console.error('[Job Runner] JOB_TOKEN not configured')
-      return NextResponse.json(
-        { error: 'Server configuration error' },
-        { status: 500 }
-      )
-    }
+    // 动态导入并执行 make-signals
+    const { makeSignals } = await import('@/jobs/make-signals')
+    const r2 = await makeSignals()
     
-    const providedToken = authHeader?.replace('Bearer ', '')
-    
-    if (providedToken !== expectedToken) {
-      console.error('[Job Runner] Invalid token')
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-    
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-    console.log('🔄 Job Runner Started')
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-    
-    // 2. 运行 fetch-tickers
-    console.log('\n📡 Step 1: Fetching tickers...')
-    const fetchResult = await fetchTickers()
-    console.log(`✅ Fetch completed:`, {
-      assetsCreated: fetchResult.assetsCreated,
-      assetsUpdated: fetchResult.assetsUpdated,
-      pairsCreated: fetchResult.pairsCreated,
+    return NextResponse.json({ 
+      ok: true, 
+      tookMs: Date.now() - started, 
+      fetch: r1, 
+      make: r2 
     })
-    
-    // 3. 运行 make-signals
-    console.log('\n📊 Step 2: Making signals...')
-    const signalsResult = await makeSignals()
-    console.log(`✅ Signals completed:`, {
-      signalsCreated: signalsResult.signalsCreated,
-    })
-    
-    const duration = Date.now() - startTime
-    
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-    console.log('✅ Job Runner Completed')
-    console.log(`⏱️  Total duration: ${(duration / 1000).toFixed(2)}s`)
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
-    
-    // 4. 返回结果
-    return NextResponse.json({
-      success: true,
-      duration,
-      results: {
-        fetch: {
-          assetsCreated: fetchResult.assetsCreated,
-          assetsUpdated: fetchResult.assetsUpdated,
-          pairsCreated: fetchResult.pairsCreated,
-        },
-        signals: {
-          signalsCreated: signalsResult.signalsCreated,
-        },
-      },
-      timestamp: new Date().toISOString(),
-    })
-  } catch (error: any) {
-    const duration = Date.now() - startTime
-    
-    console.error('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-    console.error('❌ Job Runner Failed')
-    console.error(`⏱️  Duration: ${(duration / 1000).toFixed(2)}s`)
-    console.error('Error:', error.message)
-    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
-    
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message,
-        duration,
-        timestamp: new Date().toISOString(),
-      },
-      { status: 500 }
-    )
+  } catch (e: any) {
+    console.error('Job execution error:', e)
+    return NextResponse.json({ 
+      ok: false, 
+      error: e?.message || String(e) 
+    }, { status: 500 })
   }
 }
-
-/**
- * Health check endpoint
- */
-export async function GET() {
-  return NextResponse.json({
-    status: 'ready',
-    message: 'Job runner is ready. Use POST with JOB_TOKEN to execute jobs.',
-  })
-}
-

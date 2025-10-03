@@ -8,6 +8,10 @@
 ![Prisma](https://img.shields.io/badge/Prisma-5-2D3748)
 ![Tests](https://img.shields.io/badge/tests-500%2B-green)
 
+## 🌐 在线演示
+
+**生产环境**: [https://hotscan-qh53iz1bt-fangp458-2547s-projects.vercel.app](https://hotscan-qh53iz1bt-fangp458-2547s-projects.vercel.app)
+
 ---
 
 ## 🚀 快速部署到 Vercel

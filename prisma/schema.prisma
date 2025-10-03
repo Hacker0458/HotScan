@@ -106,11 +106,20 @@ model Pair {
   assetId      String
   
   // DEX Info
-  dex          String   // e.g., "uniswap-v3", "pancakeswap", "raydium"
-  address      String   // Pool/Pair contract address
+  dexId        String   // e.g., "uniswap-v3", "pancakeswap", "raydium"
+  dex          String   @default("") // Deprecated, use dexId
+  pairAddress  String   // Pool/Pair contract address
+  address      String   @default("") // Deprecated, use pairAddress
+  chainId      String   // e.g., "ethereum", "bsc", "solana"
   
   // Liquidity
   liquidityUSD Float    // Current liquidity in USD
+  
+  // Price & Market
+  priceUsd     Float?   // Current price in USD
+  fdv          Float?   // Fully Diluted Valuation
+  volumeH24    Float?   // 24h volume
+  priceChangeH24 Float? // 24h price change percentage
   
   // Metadata
   baseToken    String?  // Base token symbol (e.g., "USDT")
@@ -123,9 +132,10 @@ model Pair {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   
-  @@unique([assetId, dex, address])
+  @@unique([pairAddress, chainId])
   @@index([assetId])
-  @@index([dex])
+  @@index([dexId])
+  @@index([chainId])
   @@index([liquidityUSD(sort: Desc)])
   @@index([createdAt])
 }

@@ -1,34 +1,31 @@
-/**
- * API Route: /api/signals
- * 
- * 功能：获取交易信号列表
- * 方法：GET
- */
-
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
-    const assetId = searchParams.get('assetId')
-    const window = searchParams.get('window')
+    
+    // 解析查询参数
+    const window = searchParams.get('window') || undefined
+    const assetId = searchParams.get('assetId') || undefined
     const minRiskScore = searchParams.get('minRiskScore')
     const maxRiskScore = searchParams.get('maxRiskScore')
-    const limit = parseInt(searchParams.get('limit') || '20')
+    const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100)
     const offset = parseInt(searchParams.get('offset') || '0')
 
     // 构建查询条件
     const where: any = {}
-    if (assetId) where.assetId = assetId
     if (window) where.window = window
+    if (assetId) where.assetId = assetId
     if (minRiskScore || maxRiskScore) {
       where.riskScore = {}
       if (minRiskScore) where.riskScore.gte = parseFloat(minRiskScore)
       if (maxRiskScore) where.riskScore.lte = parseFloat(maxRiskScore)
     }
 
-    // 查询信号
+    // 查询信号和总数
     const [signals, total] = await Promise.all([
       prisma.signal.findMany({
         where,
@@ -39,34 +36,38 @@ export async function GET(request: NextRequest) {
               symbol: true,
               name: true,
               chain: true,
-              logo: true,
-            },
-          },
+              logo: true
+            }
+          }
         },
         orderBy: [
           { createdAt: 'desc' },
-          { riskScore: 'desc' },
+          { riskScore: 'desc' }
         ],
         take: limit,
-        skip: offset,
+        skip: offset
       }),
-      prisma.signal.count({ where }),
+      prisma.signal.count({ where })
     ])
 
     return NextResponse.json({
       success: true,
       data: signals,
-      pagination: {
+      meta: {
         total,
         limit,
         offset,
         hasMore: offset + limit < total,
-      },
+        generatedAt: new Date().toISOString()
+      }
     })
   } catch (error: any) {
     console.error('Signals GET error:', error)
     return NextResponse.json(
-      { error: error.message || '获取信号失败' },
+      { 
+        success: false,
+        error: error.message || '获取信号失败' 
+      },
       { status: 500 }
     )
   }

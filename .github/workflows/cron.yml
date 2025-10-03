@@ -1,13 +1,12 @@
-name: Scheduled Data Fetch
+name: cron
 
 on:
   schedule:
-    # 每 30 分钟运行一次（UTC时间）
-    - cron: '*/30 * * * *'
-  workflow_dispatch: # 允许手动触发
+    - cron: "*/30 * * * *"  # 每 30 分钟执行一次
+  workflow_dispatch:  # 允许手动触发
 
 jobs:
-  fetch-and-generate:
+  run:
     runs-on: ubuntu-latest
     
     steps:
@@ -17,40 +16,26 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'pnpm'
+          node-version: 20
       
       - name: Install pnpm
-        run: npm install -g pnpm
+        run: npm i -g pnpm
       
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       
-      - name: Generate Prisma Client
-        run: npx prisma generate
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      
-      - name: Fetch Tickers
-        run: pnpm jobs:fetch
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DATASOURCE: ${{ secrets.DATASOURCE }}
-      
-      - name: Make Signals
-        run: pnpm jobs:signals
+      - name: Run fetch-tickers
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_API_BASE: ${{ secrets.OPENAI_API_BASE }}
           DATASOURCE: ${{ secrets.DATASOURCE }}
+        run: pnpm tsx jobs/fetch-tickers.ts
       
-      - name: Report Status
-        if: always()
-        run: |
-          if [ $? -eq 0 ]; then
-            echo "✅ Jobs completed successfully"
-          else
-            echo "❌ Jobs failed"
-            exit 1
-          fi
+      - name: Run make-signals
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_API_BASE: ${{ secrets.OPENAI_API_BASE }}
+          DATASOURCE: ${{ secrets.DATASOURCE }}
+        run: pnpm tsx jobs/make-signals.ts

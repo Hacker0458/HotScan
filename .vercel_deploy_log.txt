@@ -1,0 +1,12 @@
+Vercel CLI 48.1.6
+Retrieving project…
+Deploying fangp458-2547s-projects/hotscan
+Inspect: https://vercel.com/fangp458-2547s-projects/hotscan/DHLYMaEZ6fa85jgwHFeuExhdTpbu [3s]
+Production: https://hotscan-emb47jxdg-fangp458-2547s-projects.vercel.app [3s]
+https://hotscan-emb47jxdg-fangp458-2547s-projects.vercel.appQueued
+Building
+Completing
+
+Common next commands:
+- `vercel inspect hotscan-emb47jxdg-fangp458-2547s-projects.vercel.app --logs`
+- `vercel redeploy hotscan-emb47jxdg-fangp458-2547s-projects.vercel.app`
