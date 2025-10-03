@@ -1,8 +1,9 @@
 import { prisma } from '../src/lib/prisma'
 import { getDataSource, DexPair } from '../src/lib/datasources/dexscreener'
+import { generateFallbackSummary } from '../src/lib/ai/summary'
 
 const SIGNAL_WINDOWS = ['5m', '1h'] as const
-const MOCK_AI = process.env.MOCK_AI === '1'
+const MOCK_AI = process.env.MOCK_AI === '1' || process.env.MOCK_AI === 'true'
 
 /**
  * 计算风险评分（0-100，越高越危险）
@@ -68,20 +69,23 @@ function calculateRiskScore(data: {
 }
 
 /**
- * 生成 AI 摘要
+ * 生成 AI 摘要（使用兜底策略）
  */
-function generateSimpleSummary(signal: any, asset: any): { cn: string; en: string } {
-  const priceDir = signal.priceChangePct > 0 ? '上涨' : signal.priceChangePct < 0 ? '下跌' : '持平'
-  const priceChange = Math.abs(signal.priceChangePct).toFixed(1)
-  const riskLevel = signal.riskScore >= 70 ? '极高风险' : signal.riskScore >= 50 ? '高风险' : '中等风险'
-  const liquidityText = signal.totalLiquidityUSD >= 1000000 
-    ? `流动性 $${(signal.totalLiquidityUSD / 1000000).toFixed(1)}M` 
-    : `流动性较低`
-
-  return {
-    cn: `「${asset.name}」${signal.window} 窗口${priceDir} ${priceChange}%，${liquidityText}。风险评分 ${signal.riskScore}/100，${riskLevel}。${signal.riskScore >= 70 ? '⚠️ 请谨慎交易！' : ''}`,
-    en: `${asset.name} ${signal.window} ${priceDir} ${priceChange}%, Risk ${signal.riskScore}/100. ${riskLevel}.`
-  }
+function generateSimpleSummary(
+  signal: any, 
+  asset: any, 
+  pair: any
+): string {
+  // 使用新的 AI 摘要模块（兜底策略）
+  return generateFallbackSummary({
+    symbol: asset.symbol,
+    priceChange1h: pair?.priceChange1h || signal.priceChangePct,
+    priceChange24h: pair?.priceChange24h || null,
+    volumeZScore: signal.volZScore || 0,
+    liquidityDeltaPct: signal.liqDeltaPct || 0,
+    riskScore: signal.riskScore,
+    sentiment: signal.sentiment || null
+  })
 }
 
 export async function makeSignals() {
@@ -192,10 +196,18 @@ export async function makeSignals() {
         ? (volumeH1 - avgHourlyVolume) / (avgHourlyVolume * 0.5 + 1)
         : 0
 
-      // 生成 AI 摘要
+      // 生成 AI 摘要（使用兜底策略）
       const aiSummary = generateSimpleSummary(
-        { priceChangePct, window, riskScore, totalLiquidityUSD: liquidityUsd },
-        asset
+        { 
+          priceChangePct, 
+          window, 
+          riskScore, 
+          totalLiquidityUSD: liquidityUsd,
+          volZScore,
+          liqDeltaPct: 0
+        },
+        asset,
+        mainPair || dbPair
       )
 
       // 判断情绪
@@ -227,7 +239,7 @@ export async function makeSignals() {
             riskScore: riskScore,
             contractAgeDays: contractAgeDays,
             sentiment: sentiment,
-            aiSummary: aiSummary.cn, // 使用中文摘要，英文摘要可以附加在末尾
+            aiSummary: aiSummary, // 使用生成的摘要
             alertLevel: alertLevel
           }
         })

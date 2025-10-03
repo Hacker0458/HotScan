@@ -36,7 +36,24 @@ export async function GET(request: NextRequest) {
               symbol: true,
               name: true,
               chain: true,
-              logo: true
+              logo: true,
+              pairs: {
+                select: {
+                  id: true,
+                  priceUsd: true,
+                  priceChange1h: true,
+                  priceChange24h: true,
+                  liquidityUSD: true,
+                  volumeH24: true,
+                  fdv: true,
+                  dexId: true,
+                  chainId: true
+                },
+                orderBy: {
+                  liquidityUSD: 'desc'
+                },
+                take: 1 // 取流动性最大的那个 pair
+              }
             }
           }
         },
@@ -50,9 +67,20 @@ export async function GET(request: NextRequest) {
       prisma.signal.count({ where })
     ])
 
+    // 将 pair 信息扁平化到结果中
+    const signalsWithPair = signals.map(signal => {
+      const pair = signal.asset.pairs[0] || null
+      const { pairs, ...assetWithoutPairs } = signal.asset
+      return {
+        ...signal,
+        asset: assetWithoutPairs,
+        pair
+      }
+    })
+
     return NextResponse.json({
       success: true,
-      data: signals,
+      data: signalsWithPair,
       meta: {
         total,
         limit,

@@ -2,7 +2,7 @@ name: cron
 
 on:
   schedule:
-    - cron: "*/30 * * * *"  # 每 30 分钟执行一次
+    - cron: "*/15 * * * *"  # 每 15 分钟执行一次
   workflow_dispatch:  # 允许手动触发
 
 jobs:

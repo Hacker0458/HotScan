@@ -21,6 +21,17 @@ interface Signal {
     chain: string
     logo?: string | null
   }
+  pair?: {
+    id: string
+    priceUsd?: number | null
+    priceChange1h?: number | null
+    priceChange24h?: number | null
+    liquidityUSD: number
+    volumeH24?: number | null
+    fdv?: number | null
+    dexId: string
+    chainId?: string | null
+  } | null
 }
 
 interface SignalCardProps {
@@ -36,6 +47,20 @@ function formatLiquidity(value: number): string {
     return `$${(value / 1_000).toFixed(1)}K`
   }
   return `$${value.toFixed(0)}`
+}
+
+function formatPrice(value?: number | null): string {
+  if (!value) return 'N/A'
+  if (value >= 1000) {
+    return `$${(value / 1000).toFixed(2)}K`
+  }
+  if (value >= 1) {
+    return `$${value.toFixed(4)}`
+  }
+  if (value >= 0.0001) {
+    return `$${value.toFixed(6)}`
+  }
+  return `$${value.toExponential(2)}`
 }
 
 function getRiskBadge(score: number): { label: string; className: string } {
@@ -55,7 +80,7 @@ function getPriceChangeIcon(pct: number) {
 }
 
 export default function SignalCard({ signal, sparklineData }: SignalCardProps) {
-  const { asset, priceChangePct, totalLiquidityUSD, riskScore, window } = signal
+  const { asset, pair, priceChangePct, totalLiquidityUSD, riskScore, window } = signal
   const risk = getRiskBadge(riskScore)
   const PriceIcon = getPriceChangeIcon(priceChangePct)
   
@@ -65,6 +90,15 @@ export default function SignalCard({ signal, sparklineData }: SignalCardProps) {
     : [{ i: 0, v: 0 }]
   
   const priceColor = priceChangePct > 0 ? 'text-green-500' : priceChangePct < 0 ? 'text-red-500' : 'text-muted-foreground'
+  
+  // Use pair data if available
+  const displayPrice = pair?.priceUsd
+  const priceChange1h = pair?.priceChange1h
+  const priceChange24h = pair?.priceChange24h
+  const liquidity = pair?.liquidityUSD || totalLiquidityUSD
+  
+  const get1hColor = (val?: number | null) => val && val > 0 ? 'text-green-500' : val && val < 0 ? 'text-red-500' : 'text-muted-foreground'
+  const get24hColor = (val?: number | null) => val && val > 0 ? 'text-green-500' : val && val < 0 ? 'text-red-500' : 'text-muted-foreground'
   
   return (
     <Link
@@ -89,26 +123,36 @@ export default function SignalCard({ signal, sparklineData }: SignalCardProps) {
             <p className="text-sm text-muted-foreground truncate">
               {asset.name} · {asset.chain}
             </p>
+            {displayPrice && (
+              <p className="text-base font-semibold text-primary mt-1">
+                {formatPrice(displayPrice)}
+              </p>
+            )}
           </div>
           <ExternalLink className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
         </div>
         
         {/* Metrics */}
-        <div className="grid grid-cols-3 gap-3 text-sm">
+        <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
-            <div className="text-xs text-muted-foreground mb-0.5">Δ% ({window})</div>
-            <div className={`font-semibold flex items-center gap-1 ${priceColor}`}>
-              <PriceIcon className="h-3 w-3" />
-              {priceChangePct > 0 ? '+' : ''}{priceChangePct.toFixed(2)}%
+            <div className="text-xs text-muted-foreground mb-0.5">Δ 1h / 24h</div>
+            <div className="flex items-center gap-2">
+              <span className={`font-semibold ${get1hColor(priceChange1h)}`}>
+                {priceChange1h !== null && priceChange1h !== undefined 
+                  ? `${priceChange1h > 0 ? '+' : ''}${priceChange1h.toFixed(2)}%`
+                  : 'N/A'}
+              </span>
+              <span className="text-muted-foreground">/</span>
+              <span className={`text-xs ${get24hColor(priceChange24h)}`}>
+                {priceChange24h !== null && priceChange24h !== undefined
+                  ? `${priceChange24h > 0 ? '+' : ''}${priceChange24h.toFixed(2)}%`
+                  : 'N/A'}
+              </span>
             </div>
           </div>
           <div>
             <div className="text-xs text-muted-foreground mb-0.5">Liquidity</div>
-            <div className="font-semibold">{formatLiquidity(totalLiquidityUSD)}</div>
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground mb-0.5">Risk</div>
-            <div className="font-semibold">{riskScore}/100</div>
+            <div className="font-semibold">{formatLiquidity(liquidity)}</div>
           </div>
         </div>
         

@@ -77,6 +77,8 @@ export async function fetchTickers() {
         const liquidityUSD = pair.liquidity?.usd || 0
         const priceUsd = parseFloat(pair.priceUsd || '0')
         const fdv = pair.fdv || 0
+        const priceChange1h = pair.priceChange?.h1 || 0
+        const priceChange24h = pair.priceChange?.h24 || 0
 
         const existingPair = await prisma.pair.findFirst({
           where: { 
@@ -96,22 +98,24 @@ export async function fetchTickers() {
               chainId: pair.chainId,
               liquidityUSD: liquidityUSD,
               priceUsd: priceUsd,
+              priceChange1h: priceChange1h,
+              priceChange24h: priceChange24h,
               fdv: fdv,
               volumeH24: pair.volume?.h24 || 0,
-              priceChangeH24: pair.priceChange?.h24 || 0,
             },
           })
           pairsCreated++
-          console.log(`    ✅ 创建 Pair: ${symbol}/${pair.quoteToken.symbol} (流动性: $${(liquidityUSD / 1000000).toFixed(2)}M)`)
+          console.log(`    ✅ 创建 Pair: ${symbol}/${pair.quoteToken.symbol} ($${priceUsd.toFixed(6)} | Δ1h: ${priceChange1h.toFixed(2)}%)`)
         } else {
           await prisma.pair.update({
             where: { id: existingPair.id },
             data: {
               liquidityUSD: liquidityUSD,
               priceUsd: priceUsd,
+              priceChange1h: priceChange1h,
+              priceChange24h: priceChange24h,
               fdv: fdv,
               volumeH24: pair.volume?.h24 || 0,
-              priceChangeH24: pair.priceChange?.h24 || 0,
             },
           })
           pairsUpdated++

@@ -116,10 +116,11 @@ model Pair {
   liquidityUSD Float    // Current liquidity in USD
   
   // Price & Market
-  priceUsd     Float?   // Current price in USD
-  fdv          Float?   // Fully Diluted Valuation
-  volumeH24    Float?   // 24h volume
-  priceChangeH24 Float? // 24h price change percentage
+  priceUsd       Float?   // Current price in USD
+  priceChange1h  Float?   // 1h price change percentage
+  priceChange24h Float?   // 24h price change percentage
+  fdv            Float?   // Fully Diluted Valuation
+  volumeH24      Float?   // 24h volume
   
   // Metadata
   baseToken    String?  // Base token symbol (e.g., "USDT")
