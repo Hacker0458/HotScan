@@ -13,6 +13,7 @@ interface Signal {
   totalLiquidityUSD: number
   riskScore: number
   sentiment: string
+  aiSummary?: string | null
   createdAt: string
   asset: {
     id: string
@@ -155,6 +156,13 @@ export default function SignalCard({ signal, sparklineData }: SignalCardProps) {
             <div className="font-semibold">{formatLiquidity(liquidity)}</div>
           </div>
         </div>
+        
+        {/* AI Summary */}
+        {signal.aiSummary && (
+          <div className="text-xs text-muted-foreground line-clamp-2 border-t pt-2">
+            {signal.aiSummary}
+          </div>
+        )}
         
         {/* Sparkline */}
         <div className="h-16 -mx-2">
