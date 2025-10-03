@@ -106,11 +106,11 @@ model Pair {
   assetId      String
   
   // DEX Info
-  dexId        String   // e.g., "uniswap-v3", "pancakeswap", "raydium"
+  dexId        String   @default("unknown") // e.g., "uniswap-v3", "pancakeswap", "raydium"
   dex          String   @default("") // Deprecated, use dexId
-  pairAddress  String   // Pool/Pair contract address
+  pairAddress  String?  // Pool/Pair contract address
   address      String   @default("") // Deprecated, use pairAddress
-  chainId      String   // e.g., "ethereum", "bsc", "solana"
+  chainId      String?  // e.g., "ethereum", "bsc", "solana"
   
   // Liquidity
   liquidityUSD Float    // Current liquidity in USD
