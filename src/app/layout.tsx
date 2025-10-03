@@ -1,24 +1,34 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import { Header } from '@/components/header'
-import { Footer } from '@/components/footer'
+import Header from '@/components/Header'
+import Footer from '@/components/Footer'
 import { Providers } from './providers'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 
 const inter = Inter({ subsets: ['latin'] })
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
-  title: 'HotScan｜热点雷达 - AI驱动的热点新闻聚合分析平台',
-  description: '实时追踪全球热点话题，AI智能分析，为您提供最有价值的信息洞察。',
-  keywords: '热点新闻,趋势分析,AI分析,新闻聚合,实时热点',
+  title: {
+    default: 'HotScan - Real-time Crypto Market Signals',
+    template: '%s | HotScan'
+  },
+  description: 'Real-time cryptocurrency market signal monitoring powered by DexScreener and AI analysis. Track liquidity, price changes, and risk scores.',
+  keywords: ['crypto', 'cryptocurrency', 'trading', 'signals', 'DexScreener', 'market analysis', 'defi'],
   authors: [{ name: 'HotScan Team' }],
   openGraph: {
-    title: 'HotScan｜热点雷达',
-    description: '实时追踪全球热点话题，AI智能分析',
+    title: 'HotScan - Real-time Crypto Market Signals',
+    description: 'Monitor crypto market signals with AI-powered risk analysis',
     type: 'website',
+    siteName: 'HotScan',
   },
+  robots: {
+    index: process.env.NEXT_PUBLIC_SEO_ENABLED !== 'false',
+    follow: process.env.NEXT_PUBLIC_SEO_ENABLED !== 'false',
+  }
 }
 
 export default function RootLayout({
