@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { makeSignals } from '@/jobs/make-signals'
 
+export const dynamic = 'force-dynamic'
 export const maxDuration = 300 // 5 minutes
 
 export async function POST(request: NextRequest) {

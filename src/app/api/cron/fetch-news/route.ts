@@ -20,6 +20,7 @@ import { prisma } from '@/lib/prisma'
 import { fetchTrendingNews, calculateTrendScore } from '@/lib/news-fetcher'
 import { analyzeSentiment, extractKeywords, generateEmbedding } from '@/lib/openai'
 
+export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 export const maxDuration = 300 // 5 minutes
 
