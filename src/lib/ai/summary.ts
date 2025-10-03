@@ -17,10 +17,13 @@ interface SignalMetrics {
 export function generateFallbackSummary(metrics: SignalMetrics): string {
   const { symbol, priceChange1h, priceChange24h, volumeZScore, liquidityDeltaPct, riskScore } = metrics
   
-  // 判断方向
-  const direction = (priceChange1h || 0) > 0 ? '上涨' : (priceChange1h || 0) < 0 ? '下跌' : '横盘'
-  const change1h = priceChange1h ? Math.abs(priceChange1h).toFixed(2) + '%' : 'N/A'
-  const change24h = priceChange24h ? `24h ${priceChange24h > 0 ? '+' : ''}${priceChange24h.toFixed(2)}%` : ''
+  // 判断方向和变化
+  const price1h = priceChange1h !== null && priceChange1h !== undefined ? priceChange1h : 0
+  const direction = price1h > 0.5 ? '上涨' : price1h < -0.5 ? '下跌' : '横盘'
+  const change1h = Math.abs(price1h).toFixed(2) + '%'
+  const change24h = priceChange24h !== null && priceChange24h !== undefined
+    ? `，24h ${priceChange24h > 0 ? '+' : ''}${priceChange24h.toFixed(2)}%` 
+    : ''
   
   // 判断成交量强度
   let volumeStrength = '正常'
@@ -38,7 +41,7 @@ export function generateFallbackSummary(metrics: SignalMetrics): string {
   if (riskScore >= 60) riskLevel = '高'
   else if (riskScore >= 40) riskLevel = '中'
   
-  return `${symbol}${direction}${change1h}${change24h ? '，' + change24h : ''}；成交量${volumeStrength}；流动性${liquidityTrend}；风险${riskLevel}。`
+  return `${symbol}${direction}${change1h}${change24h}；成交量${volumeStrength}；流动性${liquidityTrend}；风险${riskLevel}。`
 }
 
 // AI 生成摘要（轻量模型）
