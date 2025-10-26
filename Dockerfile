@@ -7,8 +7,8 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # 复制依赖文件
-COPY package.json pnpm-lock.yaml ./
-RUN corepack enable pnpm && pnpm install --prod --frozen-lockfile
+COPY package.json pnpm-lock.yaml* ./
+RUN corepack enable pnpm && pnpm install --prod
 
 # 构建应用
 FROM base AS builder
