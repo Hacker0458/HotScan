@@ -1,53 +1,29 @@
 version: '3.8'
 
 services:
-  hotscan-web:
+  hotscan:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: hotscan-web
-    restart: unless-stopped
+    container_name: hotscan
+    restart: always
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
+      - PORT=3000
       - DATABASE_URL=${DATABASE_URL}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_API_BASE=${OPENAI_API_BASE}
-      - NEXT_PUBLIC_HOMEPAGE_REFRESH_INTERVAL_MS=15000
-      - ENABLE_AI_SUMMARY=false
-      - MOCK_AI=true
-    volumes:
-      - ./prisma:/app/prisma:ro
+      - PROBEX_API_KEY=${PROBEX_API_KEY}
+      - AIUM_API_KEY=${AIUM_API_KEY}
+      - CHATAIAPI_KEY=${CHATAIAPI_KEY}
+      - NEXTAUTH_URL=${NEXTAUTH_URL}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - JOB_TOKEN=${JOB_TOKEN}
+      - DATASOURCE=${DATASOURCE}
+      - NEXT_PUBLIC_HOMEPAGE_REFRESH_INTERVAL_MS=${NEXT_PUBLIC_HOMEPAGE_REFRESH_INTERVAL_MS}
     networks:
       - hotscan-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  hotscan-cron:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: hotscan-cron
-    restart: unless-stopped
-    environment:
-      - NODE_ENV=production
-      - DATABASE_URL=${DATABASE_URL}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_API_BASE=${OPENAI_API_BASE}
-    volumes:
-      - ./jobs:/app/jobs:ro
-      - ./src:/app/src:ro
-      - ./prisma:/app/prisma:ro
-    networks:
-      - hotscan-network
-    command: sh -c "while true; do echo '🚀 Running make-signals...'; node /app/jobs/make-signals.js || pnpm tsx /app/jobs/make-signals.ts; echo '✅ Completed. Sleeping 30m...'; sleep 1800; done"
 
 networks:
   hotscan-network:
     driver: bridge
-
