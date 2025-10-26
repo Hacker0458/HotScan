@@ -26,6 +26,7 @@ model User {
   accounts      Account[]
   sessions      Session[]
   subscriptions Subscription[]
+  alerts        Alert[]
   
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -91,6 +92,7 @@ model Asset {
   pairs     Pair[]
   signals   Signal[]
   shares    Share[]
+  alerts    Alert[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -366,4 +368,43 @@ model NewsItem {
   @@index([category])
   @@index([source])
   @@index([sentiment])
+}
+
+// ============================================
+// Alerts & Notifications
+// ============================================
+
+model Alert {
+  id            String    @id @default(cuid())
+  
+  // User
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Target Asset
+  assetId       String
+  asset         Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  
+  // Alert Configuration
+  alertType     String    // price_above, price_below, change_pct_up, change_pct_down, risk_level_change
+  targetValue   Float?    // Target price or percentage
+  timeWindow    String?   // 1h, 24h (for change_pct alerts)
+  
+  // Status
+  enabled       Boolean   @default(true)
+  triggered     Boolean   @default(false)
+  lastTriggered DateTime?
+  triggerCount  Int       @default(0)
+  
+  // Notification preferences
+  notifyBrowser Boolean   @default(true)
+  notifyEmail   Boolean   @default(false)
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@index([userId, enabled])
+  @@index([assetId, enabled])
+  @@index([alertType])
+  @@index([triggered])
 }
