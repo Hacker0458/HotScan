@@ -4,6 +4,7 @@ import useSWR from 'swr'
 import { useSearchParams } from 'next/navigation'
 import { useI18n } from '@/components/LangProvider'
 import { TrendingUp, TrendingDown } from '@/components/icons'
+import { NewsSidebar } from '@/components/news-sidebar'
 import Link from 'next/link'
 
 type Signal = {
@@ -51,14 +52,18 @@ export default function Home() {
 
   return (
     <div className="mx-auto max-w-7xl p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">
-          {t('updated')} · {list.length} {t('signals')}
-        </div>
-        <button onClick={()=>mutate()} className="text-sm text-blue-600 hover:underline">
-          {lang === 'zh' ? '刷新' : 'Refresh'}
-        </button>
-      </div>
+      {/* Two-column layout: Signals + News Sidebar */}
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Main Content - Signals */}
+        <div className="flex-1">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              {t('updated')} · {list.length} {t('signals')}
+            </div>
+            <button onClick={()=>mutate()} className="text-sm text-blue-600 hover:underline">
+              {lang === 'zh' ? '刷新' : 'Refresh'}
+            </button>
+          </div>
 
       {error && (
         <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
@@ -140,6 +145,13 @@ export default function Home() {
           })}
         </div>
       )}
+        </div>
+
+        {/* Sidebar - News */}
+        <aside className="lg:w-80 xl:w-96">
+          <NewsSidebar limit={8} />
+        </aside>
+      </div>
     </div>
   )
 }

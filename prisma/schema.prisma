@@ -338,3 +338,32 @@ model RawMetric {
   @@index([fetchedAt(sort: Desc)])
   @@index([expiresAt])
 }
+
+// ============================================
+// News & Content
+// ============================================
+
+model NewsItem {
+  id          String   @id @default(cuid())
+  
+  // Content
+  title       String
+  summary     String?  @db.Text
+  url         String   @unique
+  source      String   // CryptoPanic, CoinDesk, etc
+  category    String   // news, price, regulation, technology, defi
+  
+  // Metadata
+  publishedAt DateTime
+  sentiment   String?  // positive, negative, neutral
+  relatedAssets String[] // Array of asset symbols [BTC, ETH]
+  viewCount   Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([publishedAt(sort: Desc)])
+  @@index([category])
+  @@index([source])
+  @@index([sentiment])
+}
