@@ -8,6 +8,7 @@
 import { prisma } from '@/lib/prisma'
 import { searchPairs } from '@/lib/datasources/dexscreener'
 import { generateFallbackSummaryDual } from '@/lib/ai/summary'
+import { callAI } from '@/lib/ai/smart-caller'
 
 const SIGNAL_WINDOWS = ['5m', '1h'] as const
 type SignalWindow = typeof SIGNAL_WINDOWS[number]
@@ -178,15 +179,46 @@ export async function makeSignals(): Promise<MakeSignalsResult> {
       const sentiment = priceChangePct > 5 ? 'bullish' : priceChangePct < -5 ? 'bearish' : 'neutral'
       const alertLevel = riskScore >= 70 ? 'high' : riskScore >= 50 ? 'medium' : 'low'
 
-      // 生成双语摘要
-      const summaries = generateFallbackSummaryDual({
-        symbol: asset.symbol,
-        priceChange1h: priceChange1h,
-        priceChange24h: pair.priceChange?.h24 || null,
-        volumeZScore: volZScore,
-        liquidityDeltaPct: liqDeltaPct,
-        riskScore: riskScore
-      })
+      // 生成双语摘要 - 优先使用AI，失败则使用本地模板
+      let summaries = { zh: '', en: '' }
+      
+      try {
+        // 尝试使用AI生成更智能的摘要
+        const aiPrompt = `分析加密货币 ${asset.symbol} 的市场信号：
+- 1h价格变化: ${priceChange1h.toFixed(2)}%
+- 24h价格变化: ${pair.priceChange?.h24?.toFixed(2) || 'N/A'}%
+- 成交量Z值: ${volZScore.toFixed(2)}
+- 风险评分: ${riskScore}/100
+
+请生成一句简洁的市场分析（中文50字以内，包含价格趋势、成交量状态、风险评估）。`
+
+        const zhSummary = await callAI('summary', aiPrompt, { maxTokens: 150 })
+        
+        // 生成英文版本
+        const enPrompt = `Analyze crypto ${asset.symbol} market signal:
+- 1h price change: ${priceChange1h.toFixed(2)}%
+- 24h price change: ${pair.priceChange?.h24?.toFixed(2) || 'N/A'}%
+- Volume Z-score: ${volZScore.toFixed(2)}
+- Risk score: ${riskScore}/100
+
+Generate a concise market analysis (within 15 words, including price trend, volume status, risk assessment).`
+
+        const enSummary = await callAI('summary', enPrompt, { maxTokens: 100 })
+        
+        summaries = { zh: zhSummary, en: enSummary }
+        console.log(`  🤖 AI摘要生成成功`)
+      } catch (error) {
+        // AI失败，使用本地规则模板
+        console.log(`  ⚠️  AI调用失败，使用本地模板`)
+        summaries = generateFallbackSummaryDual({
+          symbol: asset.symbol,
+          priceChange1h: priceChange1h,
+          priceChange24h: pair.priceChange?.h24 || null,
+          volumeZScore: volZScore,
+          liquidityDeltaPct: liqDeltaPct,
+          riskScore: riskScore
+        })
+      }
 
       await prisma.signal.create({
         data: {
