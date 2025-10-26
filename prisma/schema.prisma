@@ -23,10 +23,13 @@ model User {
   emailVerified DateTime?
   image         String?
   
-  accounts      Account[]
-  sessions      Session[]
-  subscriptions Subscription[]
-  alerts        Alert[]
+  accounts          Account[]
+  sessions          Session[]
+  subscriptions     Subscription[]
+  alerts            Alert[]
+  comments          Comment[]
+  discussions       Discussion[]
+  discussionReplies DiscussionReply[]
   
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -89,10 +92,11 @@ model Asset {
   isActive  Boolean  @default(true)
   
   // Relations
-  pairs     Pair[]
-  signals   Signal[]
-  shares    Share[]
-  alerts    Alert[]
+  pairs       Pair[]
+  signals     Signal[]
+  shares      Share[]
+  alerts      Alert[]
+  discussions Discussion[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -184,6 +188,7 @@ model Signal {
   
   // Relations
   asset           Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  comments        Comment[]
   
   createdAt       DateTime @default(now())
   
@@ -407,4 +412,96 @@ model Alert {
   @@index([assetId, enabled])
   @@index([alertType])
   @@index([triggered])
+}
+
+// ============================================
+// Community & Social
+// ============================================
+
+model Comment {
+  id        String   @id @default(cuid())
+  
+  // User
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Target
+  signalId  String
+  signal    Signal   @relation(fields: [signalId], references: [id], onDelete: Cascade)
+  
+  // Content
+  content   String   @db.Text
+  
+  // Engagement
+  likes     Int      @default(0)
+  dislikes  Int      @default(0)
+  
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([signalId, createdAt(sort: Desc)])
+  @@index([userId])
+}
+
+model Discussion {
+  id          String   @id @default(cuid())
+  
+  // User
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Optional Asset
+  assetId     String?
+  asset       Asset?   @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  
+  // Content
+  title       String
+  content     String   @db.Text
+  category    String   // general, technical, news, prediction
+  
+  // Engagement
+  views       Int      @default(0)
+  likes       Int      @default(0)
+  replyCount  Int      @default(0)
+  
+  // Status
+  isPinned    Boolean  @default(false)
+  isLocked    Boolean  @default(false)
+  
+  // Metadata
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  replies     DiscussionReply[]
+  
+  @@index([assetId])
+  @@index([category])
+  @@index([createdAt(sort: Desc)])
+  @@index([isPinned, createdAt(sort: Desc)])
+}
+
+model DiscussionReply {
+  id           String     @id @default(cuid())
+  
+  // User
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Discussion
+  discussionId String
+  discussion   Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  
+  // Content
+  content      String     @db.Text
+  
+  // Engagement
+  likes        Int        @default(0)
+  
+  // Metadata
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  
+  @@index([discussionId, createdAt])
+  @@index([userId])
 }
