@@ -2,10 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, Settings, Info } from 'lucide-react'
+import { Activity, Settings, Info } from '@/components/icons'
+import LangSwitch from './LangSwitch'
+import { useI18n } from './LangProvider'
 
 export default function Header() {
   const pathname = usePathname()
+  const { t } = useI18n()
   
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/'
@@ -34,7 +37,7 @@ export default function Header() {
           >
             <span className="flex items-center gap-2">
               <Activity className="h-4 w-4" />
-              Home
+              {t('home')}
             </span>
           </Link>
           <Link
@@ -48,13 +51,13 @@ export default function Header() {
           >
             <span className="flex items-center gap-2">
               <Info className="h-4 w-4" />
-              Learn
+              {t('learn')}
             </span>
           </Link>
         </nav>
         
         {/* Right side actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <Link
             href="/about"
             className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden sm:inline"
@@ -62,6 +65,7 @@ export default function Header() {
           >
             About
           </Link>
+          <LangSwitch />
           <button
             className="p-2 rounded-md hover:bg-accent"
             aria-label="Settings"

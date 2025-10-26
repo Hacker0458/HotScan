@@ -7,6 +7,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { searchPairs } from '@/lib/datasources/dexscreener'
+import { generateFallbackSummaryDual } from '@/lib/ai/summary'
 
 const SIGNAL_WINDOWS = ['5m', '1h'] as const
 type SignalWindow = typeof SIGNAL_WINDOWS[number]
@@ -177,7 +178,15 @@ export async function makeSignals(): Promise<MakeSignalsResult> {
       const sentiment = priceChangePct > 5 ? 'bullish' : priceChangePct < -5 ? 'bearish' : 'neutral'
       const alertLevel = riskScore >= 70 ? 'high' : riskScore >= 50 ? 'medium' : 'low'
 
-      const aiSummary = `${asset.symbol} ${window} 窗口 ${priceChangePct > 0 ? '上涨' : '下跌'} ${Math.abs(priceChangePct).toFixed(2)}%，风险评分 ${riskScore}/100`
+      // 生成双语摘要
+      const summaries = generateFallbackSummaryDual({
+        symbol: asset.symbol,
+        priceChange1h: priceChange1h,
+        priceChange24h: pair.priceChange?.h24 || null,
+        volumeZScore: volZScore,
+        liquidityDeltaPct: liqDeltaPct,
+        riskScore: riskScore
+      })
 
       await prisma.signal.create({
         data: {
@@ -196,7 +205,9 @@ export async function makeSignals(): Promise<MakeSignalsResult> {
           riskScore,
           contractAgeDays: contractAgeDays || 0,
           sentiment,
-          aiSummary,
+          aiSummary: summaries.zh,
+          summaryZh: summaries.zh,
+          summaryEn: summaries.en,
           alertLevel
         }
       })

@@ -44,6 +44,65 @@ export function generateFallbackSummary(metrics: SignalMetrics): string {
   return `${symbol}${direction}${change1h}${change24h}；成交量${volumeStrength}；流动性${liquidityTrend}；风险${riskLevel}。`
 }
 
+// 规则模板生成双语短评（兜底方案）
+export function generateFallbackSummaryDual(metrics: SignalMetrics): { zh: string; en: string } {
+  const { symbol, priceChange1h, priceChange24h, volumeZScore, liquidityDeltaPct, riskScore } = metrics
+  
+  // 判断方向和变化
+  const price1h = priceChange1h !== null && priceChange1h !== undefined ? priceChange1h : 0
+  const directionZh = price1h > 0.5 ? '上涨' : price1h < -0.5 ? '下跌' : '横盘'
+  const directionEn = price1h > 0.5 ? 'up' : price1h < -0.5 ? 'down' : 'flat'
+  const change1h = Math.abs(price1h).toFixed(2) + '%'
+  const change24hVal = priceChange24h !== null && priceChange24h !== undefined ? priceChange24h : 0
+  const change24hStr = priceChange24h !== null && priceChange24h !== undefined
+    ? `，24h ${priceChange24h > 0 ? '+' : ''}${priceChange24h.toFixed(2)}%` 
+    : ''
+  const change24hStrEn = priceChange24h !== null && priceChange24h !== undefined
+    ? `; 24h ${priceChange24h > 0 ? '+' : ''}${priceChange24h.toFixed(2)}%`
+    : ''
+  
+  // 判断成交量强度
+  let volumeStrengthZh = '正常'
+  let volumeStrengthEn = 'normal'
+  if (volumeZScore > 2) {
+    volumeStrengthZh = '异常放大'
+    volumeStrengthEn = 'surging'
+  } else if (volumeZScore > 1) {
+    volumeStrengthZh = '增强'
+    volumeStrengthEn = 'strong'
+  } else if (volumeZScore < -1) {
+    volumeStrengthZh = '萎缩'
+    volumeStrengthEn = 'weak'
+  }
+  
+  // 判断流动性变化
+  let liquidityTrendZh = '→'
+  let liquidityTrendEn = 'stable'
+  if (liquidityDeltaPct > 2) {
+    liquidityTrendZh = '↑'
+    liquidityTrendEn = 'rising'
+  } else if (liquidityDeltaPct < -2) {
+    liquidityTrendZh = '↓'
+    liquidityTrendEn = 'falling'
+  }
+  
+  // 判断风险等级
+  let riskLevelZh = '低'
+  let riskLevelEn = 'low'
+  if (riskScore >= 60) {
+    riskLevelZh = '高'
+    riskLevelEn = 'high'
+  } else if (riskScore >= 40) {
+    riskLevelZh = '中'
+    riskLevelEn = 'medium'
+  }
+  
+  const zh = `${symbol}${directionZh}${change1h}${change24hStr}；成交量${volumeStrengthZh}；流动性${liquidityTrendZh}；风险${riskLevelZh}。`
+  const en = `${symbol} ${directionEn} ${change1h}${change24hStrEn}; volume ${volumeStrengthEn}; liquidity ${liquidityTrendEn}; risk ${riskLevelEn}.`
+  
+  return { zh, en }
+}
+
 // AI 生成摘要（轻量模型）
 export async function generateAISummary(metrics: SignalMetrics): Promise<{
   success: boolean

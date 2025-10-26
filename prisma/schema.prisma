@@ -176,6 +176,8 @@ model Signal {
   // Sentiment & AI Analysis
   sentiment       String?  // bullish, bearish, neutral
   aiSummary       String?  @db.Text
+  summaryZh       String?  @db.Text // Chinese summary
+  summaryEn       String?  @db.Text // English summary
   alertLevel      String?  // low, medium, high, critical
   
   // Relations
@@ -190,6 +192,7 @@ model Signal {
   // 复合索引：按创建时间降序 + 风险分数降序
   @@index([createdAt(sort: Desc), riskScore(sort: Desc)])
   @@index([createdAt(sort: Desc)])
+  @@index([assetId, window, createdAt])
 }
 
 // Term - 金融术语（RAG 知识库）

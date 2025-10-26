@@ -1,165 +1,165 @@
-import { notFound } from 'next/navigation'
-import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import AssetSparkline from './sparkline'
+import { pickLang, dict } from '@/lib/i18n'
+import Link from 'next/link'
 
-export const dynamic = 'force-dynamic'
-
-interface PageProps {
-  params: { id: string }
+function formatPct(n?: number | null) {
+  if (n == null || !isFinite(n)) return '—'
+  const v = n
+  return (v>=0?'+':'') + v.toFixed(2) + '%'
 }
 
-export default async function AssetDetailPage({ params }: PageProps) {
-  const id = params.id
+function formatMoney(n?: number | null) {
+  if (n == null || !isFinite(n)) return '—'
+  if (n >= 1e9) return `$${(n/1e9).toFixed(2)}B`
+  if (n >= 1e6) return `$${(n/1e6).toFixed(2)}M`
+  if (n >= 1e3) return `$${(n/1e3).toFixed(2)}K`
+  return `$${n.toFixed(4)}`
+}
 
-  // 获取资产信息
-  const asset = await prisma.asset.findUnique({
-    where: { id }
-  })
-
-  if (!asset) {
-    return notFound()
-  }
-
-  // 获取最近 50 条信号
-  const signals = await prisma.signal.findMany({
-    where: { assetId: id },
+async function getSignals(assetId: string, window = '1h', take = 10) {
+  // 取该资产最近 N 条，时间升序用于画图
+  const rows = await prisma.signal.findMany({
+    where: { assetId, window },
     orderBy: { createdAt: 'desc' },
-    take: 50,
-    select: {
-      id: true,
-      createdAt: true,
-      priceChangePct: true,
-      riskScore: true,
-      window: true,
-      sentiment: true,
-      aiSummary: true,
-      currentPrice: true,
-      totalLiquidityUSD: true
+    take,
+    include: {
+      asset: true
     }
   })
+  return rows.reverse()
+}
 
-  // 准备图表数据
-  const chartData = signals.map(s => ({
-    t: s.createdAt.toISOString(),
-    v: s.priceChangePct,
-    r: s.riskScore
+async function getLatestPair(assetId: string) {
+  return await prisma.pair.findFirst({
+    where: { assetId },
+    orderBy: { createdAt: 'desc' }
+  })
+}
+
+export default async function AssetDetailPage({ 
+  params, 
+  searchParams 
+}: { 
+  params: { id: string }
+  searchParams: { lang?: string } 
+}) {
+  const lang = pickLang(searchParams.lang)
+  const t = dict[lang]
+  const id = params.id
+  
+  const [rows, pair] = await Promise.all([
+    getSignals(id, '1h', 10),
+    getLatestPair(id)
+  ])
+
+  // 构建图表数据：价格变化%（来自信号保存的 pair.priceChange1h 兜底）与 riskScore
+  const series = rows.map((r, idx) => ({
+    idx: idx + 1,
+    priceChangePct: pair?.priceChange1h ?? 0,
+    risk: r.riskScore ?? 0,
+    at: r.createdAt
   }))
 
+  const asset = rows[rows.length - 1]?.asset
+
+  if (!asset) {
+    return (
+      <div className="mx-auto max-w-6xl p-6">
+        <Link href={`/?lang=${lang}`} className="text-sm text-blue-600 hover:underline">
+          ← {t.home}
+        </Link>
+        <div className="mt-6 text-center py-12 text-muted-foreground">
+          {lang === 'zh' ? '资产未找到' : 'Asset not found'}
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <main className="min-h-screen bg-gray-50">
-      {/* 顶部导航 */}
-      <div className="bg-white border-b">
-        <div className="container mx-auto px-4 py-4">
-          <Link href="/">
-            <Button variant="ghost" size="sm">
-              ← 返回首页
-            </Button>
-          </Link>
+    <div className="mx-auto max-w-6xl p-6">
+      <Link href={`/?lang=${lang}`} className="text-sm text-blue-600 hover:underline">
+        ← {t.home}
+      </Link>
+      
+      <div className="mt-4">
+        <h1 className="text-3xl font-bold">{asset?.symbol ?? '—'}</h1>
+        <div className="text-lg text-muted-foreground">{asset?.name ?? ''}</div>
+        <div className="mt-1 text-sm text-muted-foreground">
+          {asset?.chain ?? ''}
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8 max-w-5xl">
-        {/* 资产信息 */}
-        <div className="mb-8">
-          <div className="flex items-center gap-4">
-            <h1 className="text-3xl font-bold">{asset.symbol}</h1>
-            <Badge variant="outline">{asset.chain}</Badge>
-          </div>
-          <p className="text-gray-600 mt-2">{asset.name}</p>
+      {/* 当前价格和关键指标 */}
+      <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="rounded-xl border bg-card p-4">
+          <div className="text-sm text-muted-foreground">{lang === 'zh' ? '当前价格' : 'Current Price'}</div>
+          <div className="text-2xl font-bold">{formatMoney(pair?.priceUsd)}</div>
         </div>
+        <div className="rounded-xl border bg-card p-4">
+          <div className="text-sm text-muted-foreground">{t.priceChange} ({t.hour})</div>
+          <div className={`text-2xl font-bold ${(pair?.priceChange1h ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            {formatPct(pair?.priceChange1h)}
+          </div>
+        </div>
+        <div className="rounded-xl border bg-card p-4">
+          <div className="text-sm text-muted-foreground">{t.liquidity}</div>
+          <div className="text-2xl font-bold">{formatMoney(pair?.liquidityUSD)}</div>
+        </div>
+      </div>
 
-        {/* 价格趋势图 */}
-        {chartData.length > 0 ? (
-          <section className="mb-8">
-            <h2 className="text-lg font-semibold mb-4">价格变化趋势（最近 {signals.length} 条信号）</h2>
-            <AssetSparkline data={chartData} />
-          </section>
+      {/* 简化版图表：显示最近点的数值 */}
+      <div className="mt-6 rounded-xl border bg-card p-4">
+        <div className="mb-4 text-lg font-semibold">
+          {lang === 'zh' ? '价格趋势与风险' : 'Price Trend & Risk'}
+        </div>
+        {series.length === 0 ? (
+          <div className="text-sm text-muted-foreground">{t.summaryNA}</div>
         ) : (
-          <div className="text-center py-12 text-gray-500">
-            暂无信号数据
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <div className="text-sm text-muted-foreground mb-2">{t.priceChange} ({t.hour})</div>
+              <div className="text-3xl font-bold">{formatPct(series.at(-1)?.priceChangePct)}</div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground mb-2">{t.risk}</div>
+              <div className="text-3xl font-bold">{series.at(-1)?.risk ?? 0}<span className="text-lg text-muted-foreground">/100</span></div>
+            </div>
           </div>
         )}
+      </div>
 
-        {/* 最近信号列表 */}
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">最近 10 条信号</h2>
-          
-          {signals.length > 0 ? (
-            <div className="space-y-3">
-              {signals.slice(0, 10).map((signal) => {
-                const isPositive = signal.priceChangePct >= 0
-                const riskColor = 
-                  signal.riskScore >= 70 ? 'destructive' :
-                  signal.riskScore >= 50 ? 'default' :
-                  'secondary'
-
-                return (
-                  <div 
-                    key={signal.id} 
-                    className="bg-white border rounded-lg p-4 hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-3">
-                        <Badge variant="outline" className="text-xs">
-                          {signal.window}
-                        </Badge>
-                        <span className={`text-lg font-bold ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
-                          {isPositive ? '+' : ''}{signal.priceChangePct.toFixed(2)}%
-                        </span>
-                        <Badge variant={riskColor}>
-                          风险: {signal.riskScore.toFixed(0)}/100
-                        </Badge>
-                      </div>
-                      <span className="text-sm text-gray-500">
-                        {new Date(signal.createdAt).toLocaleString('zh-CN', {
-                          month: '2-digit',
-                          day: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </span>
-                    </div>
-                    
-                    {signal.aiSummary && (
-                      <p className="text-sm text-gray-700 mt-2">
-                        💡 {signal.aiSummary}
-                      </p>
-                    )}
-
-                    <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
-                      {signal.currentPrice > 0 && (
-                        <span>价格: ${signal.currentPrice}</span>
-                      )}
-                      {signal.totalLiquidityUSD > 0 && (
-                        <span>
-                          流动性: ${(signal.totalLiquidityUSD / 1000000).toFixed(2)}M
-                        </span>
-                      )}
-                      <span>情绪: {signal.sentiment}</span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+      {/* 最近信号列表 */}
+      <div className="mt-6">
+        <h2 className="mb-4 text-xl font-semibold">
+          {lang==='zh' ? '最近信号' : 'Recent Signals'}
+        </h2>
+        <div className="space-y-3">
+          {rows.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">{t.summaryNA}</div>
           ) : (
-            <div className="text-center py-8 text-gray-500">
-              暂无信号数据
-            </div>
+            rows.map(r => (
+              <div key={r.id} className="rounded-lg border bg-card p-4 hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm text-muted-foreground">
+                    {new Date(r.createdAt).toLocaleString(lang === 'zh' ? 'zh-CN' : 'en-US')}
+                  </div>
+                  <div className="text-xs text-muted-foreground">{r.window}</div>
+                </div>
+                <div className="text-sm mb-2">
+                  {lang==='en'
+                    ? (r.summaryEn ?? r.aiSummary ?? dict.en.summaryNA)
+                    : (r.summaryZh ?? r.aiSummary ?? dict.zh.summaryNA)
+                  }
+                </div>
+                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                  <span>{t.priceChange} ({t.hour}): <span className={(pair?.priceChange1h ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}>{formatPct(pair?.priceChange1h)}</span></span>
+                  <span>{t.risk}: {r.riskScore ?? 0}/100</span>
+                </div>
+              </div>
+            ))
           )}
-        </section>
-
-        {/* 底部操作 */}
-        <div className="mt-12 text-center">
-          <Link href="/">
-            <Button variant="outline" size="lg">
-              返回首页查看更多资产
-            </Button>
-          </Link>
         </div>
       </div>
-    </main>
+    </div>
   )
 }
